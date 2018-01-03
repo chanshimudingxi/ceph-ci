@@ -1,3 +1,10 @@
+os_type: centos
+
+overrides:
+  install:
+    ceph:
+      flavor: notcmalloc
+
 roles:
 - - mon.a
   - mgr.x
