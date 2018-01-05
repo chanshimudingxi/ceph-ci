@@ -1059,9 +1059,6 @@ void ReplicatedBackend::do_repop(OpRequestRef op)
   // sanity checks
   assert(m->map_epoch >= get_info().history.same_interval_since);
 
-  // we better not be missing this.
-  assert(!parent->get_log().get_missing().is_missing(soid));
-
   int ackerosd = m->get_source().num();
 
   op->mark_started();
