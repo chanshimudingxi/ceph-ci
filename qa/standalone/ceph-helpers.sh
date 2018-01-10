@@ -173,7 +173,14 @@ function teardown() {
         fi
     fi
     if [ "$cores" = "yes" -o "$dumplogs" = "1" ]; then
-        display_logs $dir
+	if [ -n "$LOCALRUN" ]; then
+	    display_logs $dir
+        else
+	    # Move logs to where Teuthology will archive it
+	    # HACK: This path should come from teuthology code
+	    sudo mkdir -p /home/ubuntu/cephtest/archive/log
+	    sudo mv $dir/*.log /home/ubuntu/cephtest/archive/log
+	fi
     fi
     rm -fr $dir
     rm -rf $(get_asok_dir)
@@ -733,9 +740,9 @@ function activate_osd() {
     ceph_args+=" --debug-osd=20"
     ceph_args+=" --log-file=$dir/\$name.log"
     ceph_args+=" --pid-file=$dir/\$name.pid"
-    ceph_args+=" --osd-max-object-name-len 460"
-    ceph_args+=" --osd-max-object-namespace-len 64"
-    ceph_args+=" --enable-experimental-unrecoverable-data-corrupting-features *"
+    ceph_args+=" --osd-max-object-name-len=460"
+    ceph_args+=" --osd-max-object-namespace-len=64"
+    ceph_args+=" --enable-experimental-unrecoverable-data-corrupting-features=*"
     ceph_args+=" "
     ceph_args+="$@"
     mkdir -p $osd_data
