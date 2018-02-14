@@ -4,14 +4,15 @@
 #ifndef CEPH_RGWCACHE_H
 #define CEPH_RGWCACHE_H
 
-#include "rgw_rados.h"
-#include <string>
 #include <map>
+#include <shared_mutex>
+#include <string>
 #include <unordered_map>
+
+#include "rgw_rados.h"
 #include "include/types.h"
 #include "include/utime.h"
 #include "include/assert.h"
-#include "common/RWLock.h"
 
 enum {
   UPDATE_OBJ,
@@ -142,7 +143,7 @@ class ObjectCache {
   unsigned long lru_size;
   unsigned long lru_counter;
   unsigned long lru_window;
-  RWLock lock;
+  std::shared_mutex lock;
   CephContext *cct;
 
   vector<RGWChainedCache *> chained_cache;
@@ -157,7 +158,7 @@ class ObjectCache {
 
   void do_invalidate_all();
 public:
-  ObjectCache() : lru_size(0), lru_counter(0), lru_window(0), lock("ObjectCache"), cct(NULL), enabled(false) { }
+  ObjectCache() : lru_size(0), lru_counter(0), lru_window(0), cct(NULL), enabled(false) { }
   int get(const std::string& name, ObjectCacheInfo& bl, uint32_t mask, rgw_cache_entry_info *cache_info);
   std::optional<ObjectCacheInfo> get(const std::string& name) {
     std::optional<ObjectCacheInfo> info{std::in_place};
@@ -167,7 +168,7 @@ public:
 
   template<typename F>
   void for_each(const F& f) {
-    RWLock::RLocker l(lock);
+    std::shared_lock l(lock);
     if (enabled) {
       auto now  = ceph::coarse_mono_clock::now();
       for (const auto& [name, entry] : cache_map) {
