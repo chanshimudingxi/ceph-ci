@@ -28,10 +28,10 @@ enum {
 #define mydout(v) lsubdout(T::cct, rgw, v)
 
 struct ObjectMetaInfo {
-  uint64_t size;
+  uint64_t size = 0;
   real_time mtime;
 
-  ObjectMetaInfo() : size(0) {}
+  ObjectMetaInfo() = default;
 
   void encode(bufferlist& bl) const {
     ENCODE_START(2, 2, bl);
@@ -96,13 +96,13 @@ struct ObjectCacheInfo {
 WRITE_CLASS_ENCODER(ObjectCacheInfo)
 
 struct RGWCacheNotifyInfo {
-  uint32_t op;
+  uint32_t op = 0;
   rgw_raw_obj obj;
   ObjectCacheInfo obj_info;
-  off_t ofs;
+  off_t ofs = 0;
   string ns;
 
-  RGWCacheNotifyInfo() : op(0), ofs(0) {}
+  RGWCacheNotifyInfo() = default;
 
   void encode(bufferlist& obl) const {
     ENCODE_START(2, 2, obl);
@@ -130,25 +130,25 @@ WRITE_CLASS_ENCODER(RGWCacheNotifyInfo)
 struct ObjectCacheEntry {
   ObjectCacheInfo info;
   std::list<string>::iterator lru_iter;
-  uint64_t lru_promotion_ts;
-  uint64_t gen;
+  uint64_t lru_promotion_ts = 0;
+  uint64_t gen = 0;
   std::vector<pair<RGWChainedCache *, string> > chained_entries;
 
-  ObjectCacheEntry() : lru_promotion_ts(0), gen(0) {}
+  ObjectCacheEntry() = default;
 };
 
 class ObjectCache {
   std::unordered_map<string, ObjectCacheEntry> cache_map;
   std::list<string> lru;
-  unsigned long lru_size;
-  unsigned long lru_counter;
-  unsigned long lru_window;
+  unsigned long lru_size = 0;
+  unsigned long lru_counter = 0;
+  unsigned long lru_window = 0;
   std::shared_mutex lock;
-  CephContext *cct;
+  CephContext *cct = nullptr;
 
   vector<RGWChainedCache *> chained_cache;
 
-  bool enabled;
+  bool enabled = false;
   ceph::timespan expiry;
 
   void touch_lru(const string& name, ObjectCacheEntry& entry,
@@ -158,7 +158,7 @@ class ObjectCache {
 
   void do_invalidate_all();
 public:
-  ObjectCache() : lru_size(0), lru_counter(0), lru_window(0), cct(NULL), enabled(false) { }
+  ObjectCache() = default;
   int get(const std::string& name, ObjectCacheInfo& bl, uint32_t mask, rgw_cache_entry_info *cache_info);
   std::optional<ObjectCacheInfo> get(const std::string& name) {
     std::optional<ObjectCacheInfo> info{std::in_place};
@@ -241,7 +241,7 @@ class RGWCache  : public T
     cache.set_enabled(state);
   }
 public:
-  RGWCache() {}
+  RGWCache() = default;
 
   void register_chained_cache(RGWChainedCache *cc) override {
     cache.chain_cache(cc);
