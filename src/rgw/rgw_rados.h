@@ -3419,6 +3419,7 @@ public:
   int init_watch();
   void finalize_watch();
   int distribute(const string& key, bufferlist& bl);
+  void broadcast(bufferlist& bl);
 private:
   int robust_notify(const string& notify_oid, bufferlist& bl);
 public:
