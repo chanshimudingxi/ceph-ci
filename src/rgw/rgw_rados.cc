@@ -12589,6 +12589,16 @@ int RGWRados::distribute(const string& key, bufferlist& bl)
   return robust_notify(notify_oid, bl);
 }
 
+void RGWRados::broadcast(bufferlist& bl)
+{
+  if (watch_initialized) {
+    for (auto n = 0; n < num_watchers; ++n) {
+      robust_notify(notify_oids[n], bl);
+    }
+  }
+}
+
+
 int RGWRados::robust_notify(const string& notify_oid, bufferlist& bl)
 {
   // The reply of every machine that acks goes in here.

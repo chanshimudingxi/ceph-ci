@@ -15,8 +15,9 @@
 #include "include/assert.h"
 
 enum {
-  UPDATE_OBJ,
-  REMOVE_OBJ,
+  UPDATE_OBJ, // Update an object
+  REMOVE_OBJ, // Remove the object
+  EPOCH_NOTIFY // Ignore the object, just make sure your epoch matches
 };
 
 #define CACHE_FLAG_DATA           0x01
@@ -101,25 +102,32 @@ struct RGWCacheNotifyInfo {
   ObjectCacheInfo obj_info;
   off_t ofs = 0;
   string ns;
+  std::optional<uint64_t> epoch;
 
   RGWCacheNotifyInfo() = default;
 
   void encode(bufferlist& obl) const {
-    ENCODE_START(2, 2, obl);
+    ENCODE_START(3, 2, obl);
     encode(op, obl);
     encode(obj, obl);
     encode(obj_info, obl);
     encode(ofs, obl);
     encode(ns, obl);
+    encode(epoch, obl);
     ENCODE_FINISH(obl);
   }
   void decode(bufferlist::iterator& ibl) {
-    DECODE_START_LEGACY_COMPAT_LEN(2, 2, 2, ibl);
+    DECODE_START_LEGACY_COMPAT_LEN(3, 2, 2, ibl);
     decode(op, ibl);
     decode(obj, ibl);
     decode(obj_info, ibl);
     decode(ofs, ibl);
     decode(ns, ibl);
+    if (struct_v > 2) {
+      decode(epoch, ibl);
+    } else {
+      epoch = std::nullopt;
+    }
     DECODE_FINISH(ibl);
   }
   void dump(Formatter *f) const;
@@ -140,6 +148,7 @@ struct ObjectCacheEntry {
 class ObjectCache {
   std::unordered_map<string, ObjectCacheEntry> cache_map;
   std::list<string> lru;
+  std::uint64_t epoch = 0;
   unsigned long lru_size = 0;
   unsigned long lru_counter = 0;
   unsigned long lru_window = 0;
@@ -194,6 +203,14 @@ public:
 
   void chain_cache(RGWChainedCache *cache);
   void invalidate_all();
+  uint64_t get_epoch() {
+    shared_lock l(lock);
+
+    return epoch;
+  }
+  uint64_t bump_epoch();
+  // Returns true if we're in a new epoch
+  bool handle_epoch(uint64_t e);
 };
 
 template <class T>
@@ -232,6 +249,7 @@ class RGWCache  : public T
   }
 
   int distribute_cache(const string& normal_name, rgw_raw_obj& obj, ObjectCacheInfo& obj_info, int op);
+  void announce_epoch();
   int watch_cb(uint64_t notify_id,
 	       uint64_t cookie,
 	       uint64_t notifier_id,
@@ -567,12 +585,32 @@ int RGWCache<T>::distribute_cache(const string& normal_name, rgw_raw_obj& obj, O
   RGWCacheNotifyInfo info;
 
   info.op = op;
+  info.epoch = cache.get_epoch();
 
   info.obj_info = obj_info;
   info.obj = obj;
   bufferlist bl;
   encode(info, bl);
-  return T::distribute(normal_name, bl);
+  auto r = T::distribute(normal_name, bl);
+  if (r < 0) {
+    // Cache distribution failed. Declare a new epoch.
+    announce_epoch();
+  }
+  return 0;
+}
+
+template <class T>
+void RGWCache<T>::announce_epoch()
+{
+  RGWCacheNotifyInfo info;
+
+  info.op = EPOCH_NOTIFY;
+
+  info.epoch = cache.bump_epoch();
+
+  bufferlist bl;
+  encode(info, bl);
+  return T::broadcast(bl);
 }
 
 template <class T>
@@ -598,17 +636,22 @@ int RGWCache<T>::watch_cb(uint64_t notify_id,
   string oid;
   normalize_pool_and_obj(info.obj.pool, info.obj.oid, pool, oid);
   string name = normal_name(pool, oid);
-  
-  switch (info.op) {
-  case UPDATE_OBJ:
-    cache.put(name, info.obj_info, NULL);
-    break;
-  case REMOVE_OBJ:
-    cache.remove(name);
-    break;
-  default:
-    mydout(0) << "WARNING: got unknown notification op: " << info.op << dendl;
-    return -EINVAL;
+
+  if (info.epoch && cache.handle_epoch(*info.epoch)) {
+    mydout(5) << "Got new epoch: " << cache.get_epoch()
+	      << ", flushing cache and dropping rest of message." << dendl;
+  } else {
+    switch (info.op) {
+    case UPDATE_OBJ:
+      cache.put(name, info.obj_info, NULL);
+      break;
+    case REMOVE_OBJ:
+      cache.remove(name);
+      break;
+    default:
+      mydout(0) << "WARNING: got unknown notification op: " << info.op << dendl;
+      return -EINVAL;
+    }
   }
 
   return 0;
