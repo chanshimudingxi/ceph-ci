@@ -820,8 +820,8 @@ if (NOT WITH_SYSTEM_ROCKSDB)
     list(APPEND ROCKSDB_CMAKE_ARGS -DCMAKE_CXX_COMPILER=${CMAKE_CXX_COMPILER})
   endif(WITH_CCACHE AND CCACHE_FOUND)
 
-  # SSE 4.2 is enabled by default in rocksdb's crc32c. For details refer to
-  # rocksdb/util/crc32c.cc.
+  # SSE 4.2 is enabled by default in rocksdb's CMakeList.txt. For details
+  # see the HAVE_CRC32 check and refer to rocksdb/util/crc32c.cc.
   list(APPEND ROCKSDB_CMAKE_ARGS -DCMAKE_AR=${CMAKE_AR})
   list(APPEND ROCKSDB_CMAKE_ARGS -DCMAKE_BUILD_TYPE=${CMAKE_BUILD_TYPE})
 
