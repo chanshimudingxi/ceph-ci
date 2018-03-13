@@ -152,7 +152,7 @@ class ObjectCache {
   unsigned long lru_size = 0;
   unsigned long lru_counter = 0;
   unsigned long lru_window = 0;
-  std::shared_mutex lock;
+  mutable std::shared_mutex lock;
   CephContext *cct = nullptr;
 
   vector<RGWChainedCache *> chained_cache;
@@ -203,7 +203,7 @@ public:
 
   void chain_cache(RGWChainedCache *cache);
   void invalidate_all();
-  uint64_t get_epoch() {
+  uint64_t get_epoch() const {
     shared_lock l(lock);
 
     return epoch;
@@ -250,6 +250,9 @@ class RGWCache  : public T
 
   int distribute_cache(const string& normal_name, rgw_raw_obj& obj, ObjectCacheInfo& obj_info, int op);
   void announce_epoch();
+  std::optional<uint64_t> get_epoch() const override {
+    return cache.get_epoch(); } ;
+  bool handle_epoch(uint64_t e) override { return cache.handle_epoch(e); };
   int watch_cb(uint64_t notify_id,
 	       uint64_t cookie,
 	       uint64_t notifier_id,
