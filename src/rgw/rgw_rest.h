@@ -15,6 +15,9 @@
 #include "rgw_formats.h"
 #include "rgw_client_io.h"
 
+inline constexpr const char* epoch_header = "X-RGW-Cache-Epoch";
+inline constexpr const char* epoch_header_parse = "HTTP_X_RGW_CACHE_EPOCH";
+
 extern std::map<std::string, std::string> rgw_to_http_attrs;
 
 extern void rgw_rest_init(CephContext *cct, RGWRados *store, RGWZoneGroup& zone_group);
@@ -586,7 +589,8 @@ class RGWREST {
   boost::container::flat_set<x_header> x_headers;
   RGWRESTMgr mgr;
 
-  static int preprocess(struct req_state *s, rgw::io::BasicClient* rio);
+  static int preprocess(struct req_state *s, rgw::io::BasicClient* rio,
+			RGWRados *store);
 public:
   RGWREST() {}
   RGWHandler_REST *get_handler(RGWRados *store,

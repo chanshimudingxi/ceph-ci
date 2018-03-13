@@ -6124,13 +6124,8 @@ std::vector<Option> get_rgw_options() {
 			  "of RGW instances under heavy use. If you would like "
 			  "to turn off cache expiry, set this value to zero."),
 
-
     Option("rgw_inject_notify_timeout_probability", Option::TYPE_FLOAT,
 	   Option::LEVEL_DEV)
-    .set_default(0)
-    .add_tag("fault injection")
-    .add_tag("testing")
-    .add_service("rgw")
     .set_min_max(0.0, 1.0)
     .set_description("Likelihood of ignoring a notify")
     .set_long_description("This is the probability that the RGW cache will "
@@ -6154,6 +6149,22 @@ std::vector<Option> get_rgw_options() {
 			  "value may cause some operations to take longer in "
 			  "exceptional cases and thus may, rarely, cause "
 			  "clients to time out."),
+
+    Option("rgw_cache_epoch_header", Option::TYPE_BOOL,
+	   Option::LEVEL_ADVANCED)
+    .set_default(false)
+    .set_description("Enable proxy assisted cache consistency.")
+    .add_tag("performance")
+    .add_service("rgw")
+    .set_long_description("When true, add a header, 'X-RGW-Cache-Epoch' to all "
+			  "responses. The cache epoch is updated whenever "
+			  "cache distribution fails. The header allows any "
+			  "node that missed notification through the normal "
+			  "channels to be notified of a new epoch by incoming "
+			  "requests so they can ensure consistent replies. A "
+			  "load balancer or other proxy is required that "
+			  "appends this header to all requests with the "
+			  "highest version of epoch seen."),
   });
 }
 

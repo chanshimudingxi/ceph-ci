@@ -178,6 +178,10 @@ public:
   virtual uint32_t op_mask() { return 0; }
 
   virtual int error_handler(int err_no, string *error_content);
+
+  std::optional<uint64_t> get_epoch() const {
+    return store->get_epoch();
+  }
 };
 
 class RGWGetObj_Filter : public RGWGetDataCB
