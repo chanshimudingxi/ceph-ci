@@ -3395,6 +3395,11 @@ public:
   int init_watch();
   void finalize_watch();
   int distribute(const string& key, bufferlist& bl);
+private:
+  int robust_notify(const string& notify_oid, bufferlist& bl);
+public:
+  virtual std::optional<uint64_t> get_epoch() const { return std::nullopt; };
+  virtual bool handle_epoch(uint64_t e) { return false; };
   virtual int watch_cb(uint64_t notify_id,
 		       uint64_t cookie,
 		       uint64_t notifier_id,
