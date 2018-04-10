@@ -3205,11 +3205,6 @@ MOSDOp *Objecter::_prepare_osd_op(Op *op)
     m->set_reqid(op->reqid);
   }
 
-  if (mclock_service_tracker) {
-    dmc::ReqParams rp = qos_trk->get_req_params(op->target.osd);
-    m->set_qos_params(rp);
-  }
-
   logger->inc(l_osdc_op_send);
   ssize_t sum = 0;
   for (unsigned i = 0; i < m->ops.size(); i++) {
@@ -3534,7 +3529,9 @@ void Objecter::handle_osd_op_reply(MOSDOpReply *m)
   auto completion_lock = s->get_lock(op->target.base_oid);
 
   if (mclock_service_tracker) {
-    qos_trk->track_resp(op->target.osd, m->get_qos_resp());
+    // leave it as reservation until dmclock integrated into
+    // MOSDOpReply
+    qos_trk->track_resp(op->target.osd, dmc::PhaseType::reservation);
   }
   ldout(cct, 15) << "handle_osd_op_reply completed tid " << tid << dendl;
   _finish_op(op, 0);

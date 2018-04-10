@@ -22,7 +22,6 @@
 #include "osd/OpRequest.h"
 #include "osd/PG.h"
 #include "common/mClockCommon.h"
-#include "messages/MOSDOp.h"
 #include "PGPeeringEvent.h"
 
 class OSD;
@@ -98,15 +97,7 @@ public:
       start_time(start_time),
       owner(owner),
       map_epoch(e)
-  {
-    if (auto op = maybe_get_op()) {
-      auto req = (*op)->get_req();
-      if (req->get_type() == CEPH_MSG_OSD_OP) {
-	const MOSDOp *m = static_cast<const MOSDOp*>(req);
-	qos_params = m->get_qos_params();
-      }
-    }
-  }
+  { }
   OpQueueItem(OpQueueItem &&) = default;
   OpQueueItem(const OpQueueItem &) = delete;
   OpQueueItem &operator=(OpQueueItem &&) = default;

@@ -38,6 +38,7 @@
 #include "common/Finisher.h"
 #include "common/shunique_lock.h"
 #include "common/zipkin_trace.h"
+#include "common/mClockCommon.h"
 
 #include "messages/MOSDOp.h"
 #include "osd/OSDMap.h"
