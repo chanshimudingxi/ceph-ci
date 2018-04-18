@@ -53,15 +53,19 @@ static const auto signed_subresources = {
  * ?get the canonical amazon-style header for something?
  */
 
+
 static std::string
 get_canon_amz_hdr(const std::map<std::string, std::string>& meta_map)
 {
   std::string dest;
 
-  for (const auto& kv : meta_map) {
-    dest.append(kv.first);
+  for (const auto& [name, val] : meta_map) {
+    if (rgw::is_rgw_middle_header(name)) {
+      continue;
+    }
+    dest.append(name);
     dest.append(":");
-    dest.append(kv.second);
+    dest.append(val);
     dest.append("\n");
   }
 

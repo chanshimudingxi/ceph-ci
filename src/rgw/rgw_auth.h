@@ -506,6 +506,15 @@ protected:
 };
 
 } /* namespace auth */
+
+inline bool is_rgw_middle_header(string_view h) {
+  static constexpr auto prefix = std::string_view(MIDDLE_PREFIX);
+  if (h.length() >= prefix.length()) {
+    h.remove_suffix(h.length() - prefix.length());
+    return h == prefix;
+  }
+}
+
 } /* namespace rgw */
 
 

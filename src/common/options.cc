@@ -6156,15 +6156,32 @@ std::vector<Option> get_rgw_options() {
     .set_description("Enable proxy assisted cache consistency.")
     .add_tag("performance")
     .add_service("rgw")
-    .set_long_description("When true, add a header, 'X-RGW-Cache-Epoch' to all "
-			  "responses. The cache epoch is updated whenever "
-			  "cache distribution fails. The header allows any "
-			  "node that missed notification through the normal "
-			  "channels to be notified of a new epoch by incoming "
-			  "requests so they can ensure consistent replies. A "
-			  "load balancer or other proxy is required that "
-			  "appends this header to all requests with the "
+    .set_long_description("When true, add a header, 'X-RGW-Middle-Cache-Epoch' "
+			  "to all responses. The cache epoch is updated "
+			  "whenever cache distribution fails. The header "
+			  "allows any node that missed notification through "
+			  "the normal channels to be notified of a new epoch "
+			  "by incoming requests so they can ensure consistent "
+			  "replies. A load balancer or other proxy is required "
+			  "that appends this header to all requests with the "
 			  "highest version of epoch seen."),
+
+
+    Option("rgw_allow_middle_headers", Option::TYPE_BOOL,
+	   Option::LEVEL_ADVANCED)
+    .set_default(false)
+    .set_description("Enable proxy assisted cache consistency.")
+    .add_tag("security")
+    .add_service("rgw")
+    .set_long_description("When false, reject any request containing headers "
+			  "that begin with the string `X-RGW-Middle`. These "
+			  "headers are intended to allow RGW to cooperate with "
+			  "load balancers and other intelligent proxies. "
+			  "However, they pose a security problem if RGW is run "
+			  "without a load balancer or application level "
+			  "firewall that prevents untrusted clients from "
+			  "appending them."),
+
   });
 }
 
