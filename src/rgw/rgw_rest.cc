@@ -121,6 +121,7 @@ map<string, string> rgw_to_http_attrs;
 static map<string, string> generic_attrs_map;
 map<int, const char *> http_status_names;
 
+static bool allow_middle_headers = false;
 static bool cache_epoch = false;
 
 /*
@@ -225,7 +226,21 @@ void rgw_rest_init(CephContext *cct, RGWRados *store, RGWZoneGroup& zone_group)
    * and ALSO decide about overlap, if any
    */
 
+  allow_middle_headers = cct->_conf->get_val<bool>("rgw_allow_middle_headers");
   cache_epoch = cct->_conf->get_val<bool>("rgw_cache_epoch_header");
+  if (cache_epoch && !allow_middle_headers) {
+    lderr(cct)
+      << "rgw_cache_epoch_header requires rgw_allow_middle_headers, "
+      << "and I won't set it automatically because rgw_allow_middle_headers "
+      << "has security implications that could prove harmful if you aren't "
+      << "specifically running with a load balancer or application level "
+      << "firewall between your clients and your RGWs. I do my best to be a "
+      << "useful and cooperative piece of software, but since these features "
+      << "are both 'enterprisey' and marked as advanced I feel justified in "
+      << "falling over and refusing to move until you fix the problem. "
+      << "Sorry." << dendl;
+    ceph_abort();
+  }
 }
 
 static bool str_ends_with(const string& s, const string& suffix, size_t *pos)
@@ -2154,6 +2169,11 @@ int RGWREST::preprocess(struct req_state *s, rgw::io::BasicClient* cio,
   if (std::strlen(s->decoded_uri.c_str()) != s->decoded_uri.length()) {
     return -ERR_ZERO_IN_URL;
   }
+
+  if (!allow_middle_headers && info.env->exists_prefix(MIDDLE_PREFIX_PARSE)) {
+    return -EPERM;
+  }
+
 
   /* FastCGI specification, section 6.3
    * http://www.fastcgi.com/devkit/doc/fcgi-spec.html#S6.3

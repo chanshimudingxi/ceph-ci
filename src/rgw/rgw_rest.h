@@ -15,8 +15,9 @@
 #include "rgw_formats.h"
 #include "rgw_client_io.h"
 
-inline constexpr const char* epoch_header = "X-RGW-Cache-Epoch";
-inline constexpr const char* epoch_header_parse = "HTTP_X_RGW_CACHE_EPOCH";
+inline constexpr const char* epoch_header = MIDDLE_PREFIX "-Cache-Epoch";
+inline constexpr const char* epoch_header_parse =
+  MIDDLE_PREFIX_PARSE "_CACHE_EPOCH";
 
 extern std::map<std::string, std::string> rgw_to_http_attrs;
 

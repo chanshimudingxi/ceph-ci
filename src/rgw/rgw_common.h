@@ -33,6 +33,9 @@
 #include "cls/rgw/cls_rgw_types.h"
 #include "include/rados/librados.hpp"
 
+#define MIDDLE_PREFIX "X-RGW-Middle"
+#define MIDDLE_PREFIX_PARSE "HTTP_X_RGW_MIDDLE"
+
 namespace ceph {
   class Formatter;
 }
