@@ -290,3 +290,8 @@ add_executable(unittest_hobject test_hobject.cc
   $<TARGET_OBJECTS:unit-main>)
 target_link_libraries(unittest_hobject global ceph-common)
 add_ceph_unittest(unittest_hobject)
+
+add_executable(unittest_finisher test_finisher.cc
+  $<TARGET_OBJECTS:unit-main>)
+target_link_libraries(unittest_finisher global ceph-common)
+add_ceph_unittest(unittest_finisher)
