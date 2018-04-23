@@ -610,16 +610,16 @@ void Objecter::_linger_commit(LingerOp *info, int r, bufferlist& outbl)
   }
 }
 
-struct C_DoWatchError : public Context {
+struct CB_DoWatchError {
   Objecter *objecter;
   Objecter::LingerOp *info;
   int err;
-  C_DoWatchError(Objecter *o, Objecter::LingerOp *i, int r)
+  CB_DoWatchError(Objecter *o, Objecter::LingerOp *i, int r)
     : objecter(o), info(i), err(r) {
     info->get();
     info->_queued_async();
   }
-  void finish(int r) override {
+  void operator ()() {
     Objecter::unique_lock wl(objecter->rwlock);
     bool canceled = info->canceled;
     wl.unlock();
@@ -653,7 +653,7 @@ void Objecter::_linger_reconnect(LingerOp *info, int r)
       r = _normalize_watch_error(r);
       info->last_error = r;
       if (info->watch_context) {
-	finisher->queue(new C_DoWatchError(this, info, r));
+	finisher->queue(CB_DoWatchError(this, info, r));
       }
     }
     wl.unlock();
@@ -715,7 +715,7 @@ void Objecter::_linger_ping(LingerOp *info, int r, ceph::coarse_mono_time sent,
       r = _normalize_watch_error(r);
       info->last_error = r;
       if (info->watch_context) {
-	finisher->queue(new C_DoWatchError(this, info, r));
+	finisher->queue(CB_DoWatchError(this, info, r));
       }
     }
   } else {
@@ -872,17 +872,17 @@ void Objecter::_linger_submit(LingerOp *info, shunique_lock& sul)
   _send_linger(info, sul);
 }
 
-struct C_DoWatchNotify : public Context {
+struct CB_DoWatchNotify {
   Objecter *objecter;
   Objecter::LingerOp *info;
   MWatchNotify *msg;
-  C_DoWatchNotify(Objecter *o, Objecter::LingerOp *i, MWatchNotify *m)
+  CB_DoWatchNotify(Objecter *o, Objecter::LingerOp *i, MWatchNotify *m)
     : objecter(o), info(i), msg(m) {
     info->get();
     info->_queued_async();
     msg->get();
   }
-  void finish(int r) override {
+  void operator ()() {
     objecter->_do_watch_notify(info, msg);
   }
 };
@@ -904,7 +904,7 @@ void Objecter::handle_watch_notify(MWatchNotify *m)
     if (!info->last_error) {
       info->last_error = -ENOTCONN;
       if (info->watch_context) {
-	finisher->queue(new C_DoWatchError(this, info, -ENOTCONN));
+	finisher->queue(CB_DoWatchError(this, info, -ENOTCONN));
       }
     }
   } else if (!info->is_watch) {
@@ -924,7 +924,7 @@ void Objecter::handle_watch_notify(MWatchNotify *m)
       info->on_notify_finish = NULL;
     }
   } else {
-    finisher->queue(new C_DoWatchNotify(this, info, m));
+    finisher->queue(CB_DoWatchNotify(this, info, m));
   }
 }
 
