@@ -460,6 +460,7 @@ void CreateRequest<I>::handle_add_image_to_directory(int r) {
 
     m_r_saved = r;
     remove_id_object();
+    return;
   }
 
   negotiate_features();
