@@ -219,7 +219,7 @@ CreateRequest<I>::CreateRequest(IoCtx &ioctx, const std::string &image_name,
     m_features &= ~RBD_FEATURE_STRIPINGV2;
   }
 
-  ldout(m_cct, 20) << "name=" << m_image_name << ", "
+  ldout(m_cct, 10) << "name=" << m_image_name << ", "
                    << "id=" << m_image_id << ", "
                    << "size=" << m_size << ", "
                    << "features=" << m_features << ", "
@@ -278,7 +278,7 @@ void CreateRequest<I>::validate_pool() {
     return;
   }
 
-  ldout(m_cct, 20) << dendl;
+  ldout(m_cct, 15) << dendl;
 
   using klass = CreateRequest<I>;
   librados::AioCompletion *comp =
@@ -295,7 +295,7 @@ void CreateRequest<I>::validate_pool() {
 
 template<typename I>
 void CreateRequest<I>::handle_validate_pool(int r) {
-  ldout(m_cct, 20) << "r=" << r << dendl;
+  ldout(m_cct, 15) << "r=" << r << dendl;
 
   if (r == 0) {
     validate_overwrite();
@@ -340,7 +340,7 @@ void CreateRequest<I>::handle_validate_pool(int r) {
 
 template <typename I>
 void CreateRequest<I>::validate_overwrite() {
-  ldout(m_cct, 20) << dendl;
+  ldout(m_cct, 15) << dendl;
 
   m_data_io_ctx = m_ioctx;
   if (m_data_pool_id != -1) {
@@ -368,7 +368,7 @@ void CreateRequest<I>::validate_overwrite() {
 
 template <typename I>
 void CreateRequest<I>::handle_validate_overwrite(int r) {
-  ldout(m_cct, 20) << "r=" << r << dendl;
+  ldout(m_cct, 15) << "r=" << r << dendl;
 
   bufferlist bl;
   bl.append("overwrite validated");
@@ -407,7 +407,7 @@ void CreateRequest<I>::handle_validate_overwrite(int r) {
 
 template<typename I>
 void CreateRequest<I>::create_id_object() {
-  ldout(m_cct, 20) << dendl;
+  ldout(m_cct, 15) << dendl;
 
   librados::ObjectWriteOperation op;
   op.create(true);
@@ -423,7 +423,7 @@ void CreateRequest<I>::create_id_object() {
 
 template<typename I>
 void CreateRequest<I>::handle_create_id_object(int r) {
-  ldout(m_cct, 20) << "r=" << r << dendl;
+  ldout(m_cct, 15) << "r=" << r << dendl;
 
   if (r < 0) {
     lderr(m_cct) << "error creating RBD id object: " << cpp_strerror(r)
@@ -437,7 +437,7 @@ void CreateRequest<I>::handle_create_id_object(int r) {
 
 template<typename I>
 void CreateRequest<I>::add_image_to_directory() {
-  ldout(m_cct, 20) << dendl;
+  ldout(m_cct, 15) << dendl;
 
   librados::ObjectWriteOperation op;
   cls_client::dir_add_image(&op, m_image_name, m_image_id);
@@ -452,7 +452,7 @@ void CreateRequest<I>::add_image_to_directory() {
 
 template<typename I>
 void CreateRequest<I>::handle_add_image_to_directory(int r) {
-  ldout(m_cct, 20) << "r=" << r << dendl;
+  ldout(m_cct, 15) << "r=" << r << dendl;
 
   if (r < 0) {
     lderr(m_cct) << "error adding image to directory: " << cpp_strerror(r)
@@ -473,7 +473,7 @@ void CreateRequest<I>::negotiate_features() {
     return;
   }
 
-  ldout(m_cct, 20) << dendl;
+  ldout(m_cct, 15) << dendl;
 
   librados::ObjectReadOperation op;
   cls_client::get_all_features_start(&op);
@@ -490,7 +490,7 @@ void CreateRequest<I>::negotiate_features() {
 
 template<typename I>
 void CreateRequest<I>::handle_negotiate_features(int r) {
-  ldout(m_cct, 20) << "r=" << r << dendl;
+  ldout(m_cct, 15) << "r=" << r << dendl;
 
   uint64_t all_features;
   if (r >= 0) {
@@ -511,7 +511,7 @@ void CreateRequest<I>::handle_negotiate_features(int r) {
 
 template<typename I>
 void CreateRequest<I>::create_image() {
-  ldout(m_cct, 20) << dendl;
+  ldout(m_cct, 15) << dendl;
   assert(m_data_pool.empty() || m_data_pool_id != -1);
 
   ostringstream oss;
@@ -541,7 +541,7 @@ void CreateRequest<I>::create_image() {
 
 template<typename I>
 void CreateRequest<I>::handle_create_image(int r) {
-  ldout(m_cct, 20) << "r=" << r << dendl;
+  ldout(m_cct, 15) << "r=" << r << dendl;
 
   if (r == -EEXIST) {
     ldout(m_cct, 5) << "image id already in-use" << dendl;
@@ -565,7 +565,7 @@ void CreateRequest<I>::set_stripe_unit_count() {
     return;
   }
 
-  ldout(m_cct, 20) << dendl;
+  ldout(m_cct, 15) << dendl;
 
   librados::ObjectWriteOperation op;
   cls_client::set_stripe_unit_count(&op, m_stripe_unit, m_stripe_count);
@@ -580,7 +580,7 @@ void CreateRequest<I>::set_stripe_unit_count() {
 
 template<typename I>
 void CreateRequest<I>::handle_set_stripe_unit_count(int r) {
-  ldout(m_cct, 20) << "r=" << r << dendl;
+  ldout(m_cct, 15) << "r=" << r << dendl;
 
   if (r < 0) {
     lderr(m_cct) << "error setting stripe unit/count: "
@@ -600,7 +600,7 @@ void CreateRequest<I>::object_map_resize() {
     return;
   }
 
-  ldout(m_cct, 20) << dendl;
+  ldout(m_cct, 15) << dendl;
 
   librados::ObjectWriteOperation op;
   cls_client::object_map_resize(&op, Striper::get_num_objects(m_layout, m_size),
@@ -616,7 +616,7 @@ void CreateRequest<I>::object_map_resize() {
 
 template<typename I>
 void CreateRequest<I>::handle_object_map_resize(int r) {
-  ldout(m_cct, 20) << "r=" << r << dendl;
+  ldout(m_cct, 15) << "r=" << r << dendl;
 
   if (r < 0) {
     lderr(m_cct) << "error creating initial object map: "
@@ -637,7 +637,7 @@ void CreateRequest<I>::fetch_mirror_mode() {
     return;
   }
 
-  ldout(m_cct, 20) << dendl;
+  ldout(m_cct, 15) << dendl;
 
   librados::ObjectReadOperation op;
   cls_client::mirror_mode_get_start(&op);
@@ -653,7 +653,7 @@ void CreateRequest<I>::fetch_mirror_mode() {
 
 template<typename I>
 void CreateRequest<I>::handle_fetch_mirror_mode(int r) {
-  ldout(m_cct, 20) << "r=" << r << dendl;
+  ldout(m_cct, 15) << "r=" << r << dendl;
 
   if ((r < 0) && (r != -ENOENT)) {
     lderr(m_cct) << "failed to retrieve mirror mode: " << cpp_strerror(r)
@@ -697,7 +697,7 @@ void CreateRequest<I>::handle_fetch_mirror_mode(int r) {
 
 template<typename I>
 void CreateRequest<I>::journal_create() {
-  ldout(m_cct, 20) << dendl;
+  ldout(m_cct, 15) << dendl;
 
   using klass = CreateRequest<I>;
   Context *ctx = create_context_callback<klass, &klass::handle_journal_create>(
@@ -717,7 +717,7 @@ void CreateRequest<I>::journal_create() {
 
 template<typename I>
 void CreateRequest<I>::handle_journal_create(int r) {
-  ldout(m_cct, 20) << "r=" << r << dendl;
+  ldout(m_cct, 15) << "r=" << r << dendl;
 
   if (r < 0) {
     lderr(m_cct) << "error creating journal: " << cpp_strerror(r)
@@ -739,7 +739,7 @@ void CreateRequest<I>::mirror_image_enable() {
     return;
   }
 
-  ldout(m_cct, 20) << dendl;
+  ldout(m_cct, 15) << dendl;
   auto ctx = create_context_callback<
     CreateRequest<I>, &CreateRequest<I>::handle_mirror_image_enable>(this);
   auto req = mirror::EnableRequest<I>::create(m_ioctx, m_image_id,
@@ -750,7 +750,7 @@ void CreateRequest<I>::mirror_image_enable() {
 
 template<typename I>
 void CreateRequest<I>::handle_mirror_image_enable(int r) {
-  ldout(m_cct, 20) << "r=" << r << dendl;
+  ldout(m_cct, 15) << "r=" << r << dendl;
 
   if (r < 0) {
     lderr(m_cct) << "cannot enable mirroring: " << cpp_strerror(r)
@@ -766,11 +766,7 @@ void CreateRequest<I>::handle_mirror_image_enable(int r) {
 
 template<typename I>
 void CreateRequest<I>::complete(int r) {
-  ldout(m_cct, 20) << dendl;
-
-  if (r == 0) {
-    ldout(m_cct, 20) << "done." << dendl;
-  }
+  ldout(m_cct, 10) << "r=" << r << dendl;
 
   m_data_io_ctx.close();
   m_on_finish->complete(r);
@@ -785,7 +781,7 @@ void CreateRequest<I>::journal_remove() {
     return;
   }
 
-  ldout(m_cct, 20) << dendl;
+  ldout(m_cct, 15) << dendl;
 
   using klass = CreateRequest<I>;
   Context *ctx = create_context_callback<klass, &klass::handle_journal_remove>(
@@ -800,7 +796,7 @@ void CreateRequest<I>::journal_remove() {
 
 template<typename I>
 void CreateRequest<I>::handle_journal_remove(int r) {
-  ldout(m_cct, 20) << "r=" << r << dendl;
+  ldout(m_cct, 15) << "r=" << r << dendl;
 
   if (r < 0) {
     lderr(m_cct) << "error cleaning up journal after creation failed: "
@@ -817,7 +813,7 @@ void CreateRequest<I>::remove_object_map() {
     return;
   }
 
-  ldout(m_cct, 20) << dendl;
+  ldout(m_cct, 15) << dendl;
 
   using klass = CreateRequest<I>;
   librados::AioCompletion *comp =
@@ -829,7 +825,7 @@ void CreateRequest<I>::remove_object_map() {
 
 template<typename I>
 void CreateRequest<I>::handle_remove_object_map(int r) {
-  ldout(m_cct, 20) << "r=" << r << dendl;
+  ldout(m_cct, 15) << "r=" << r << dendl;
 
   if (r < 0) {
     lderr(m_cct) << "error cleaning up object map after creation failed: "
@@ -841,7 +837,7 @@ void CreateRequest<I>::handle_remove_object_map(int r) {
 
 template<typename I>
 void CreateRequest<I>::remove_header_object() {
-  ldout(m_cct, 20) << dendl;
+  ldout(m_cct, 15) << dendl;
 
   using klass = CreateRequest<I>;
   librados::AioCompletion *comp =
@@ -853,7 +849,7 @@ void CreateRequest<I>::remove_header_object() {
 
 template<typename I>
 void CreateRequest<I>::handle_remove_header_object(int r) {
-  ldout(m_cct, 20) << "r=" << r << dendl;
+  ldout(m_cct, 15) << "r=" << r << dendl;
 
   if (r < 0) {
     lderr(m_cct) << "error cleaning up image header after creation failed: "
@@ -865,7 +861,7 @@ void CreateRequest<I>::handle_remove_header_object(int r) {
 
 template<typename I>
 void CreateRequest<I>::remove_from_dir() {
-  ldout(m_cct, 20) << dendl;
+  ldout(m_cct, 15) << dendl;
 
   librados::ObjectWriteOperation op;
   cls_client::dir_remove_image(&op, m_image_name, m_image_id);
@@ -880,7 +876,7 @@ void CreateRequest<I>::remove_from_dir() {
 
 template<typename I>
 void CreateRequest<I>::handle_remove_from_dir(int r) {
-  ldout(m_cct, 20) << "r=" << r << dendl;
+  ldout(m_cct, 15) << "r=" << r << dendl;
 
   if (r < 0) {
     lderr(m_cct) << "error cleaning up image from rbd_directory object "
@@ -892,7 +888,7 @@ void CreateRequest<I>::handle_remove_from_dir(int r) {
 
 template<typename I>
 void CreateRequest<I>::remove_id_object() {
-  ldout(m_cct, 20) << dendl;
+  ldout(m_cct, 15) << dendl;
 
   using klass = CreateRequest<I>;
   librados::AioCompletion *comp =
@@ -904,7 +900,7 @@ void CreateRequest<I>::remove_id_object() {
 
 template<typename I>
 void CreateRequest<I>::handle_remove_id_object(int r) {
-  ldout(m_cct, 20) << "r=" << r << dendl;
+  ldout(m_cct, 15) << "r=" << r << dendl;
 
   if (r < 0) {
     lderr(m_cct) << "error cleaning up id object after creation failed: "
