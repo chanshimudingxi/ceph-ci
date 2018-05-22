@@ -5,6 +5,7 @@ overrides:
     conf:
       client:
         rbd default features: 125
+        debug rbd: 15
         debug rbd_mirror: 15
       # override to make these names predictable
       client.mirror.0:
