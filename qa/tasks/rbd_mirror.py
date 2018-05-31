@@ -3,6 +3,8 @@ Task for running rbd mirroring daemons and configuring mirroring
 """
 
 import logging
+import signal
+import time
 
 from teuthology.orchestra import run
 from teuthology import misc
@@ -113,7 +115,17 @@ class RBDMirror(Task):
         mirror_daemon = self.ctx.daemons.get_daemon('rbd-mirror',
                                                     self.client,
                                                     self.cluster_name)
-        mirror_daemon.stop()
+        mirror_daemon.signal(signal.SIGTERM)
+        time.sleep(30)
+        try:
+            mirror_daemon.signal(signal.SIGABRT)
+        except:
+            pass
+        try:
+            mirror_daemon.stop()
+        except:
+            pass
+
         super(RBDMirror, self).end()
 
 task = RBDMirror
