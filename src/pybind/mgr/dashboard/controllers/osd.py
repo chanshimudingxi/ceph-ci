@@ -3,6 +3,7 @@ from __future__ import absolute_import
 
 from . import ApiController, AuthRequired, RESTController
 from .. import mgr
+
 from ..services.ceph_service import CephService
 from ..services.exception import handle_send_command_error
 
@@ -56,3 +57,8 @@ class Osd(RESTController):
             'osd_metadata': mgr.get_metadata('osd', svc_id),
             'histogram': histogram,
         }
+
+    @RESTController.Resource('POST')
+    def scrub(self, svc_id, deep=False):
+        api_scrub = "osd deep-scrub" if deep else "osd scrub"
+        CephService.send_command("mon", api_scrub, who=svc_id)
