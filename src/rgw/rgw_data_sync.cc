@@ -2132,6 +2132,16 @@ public:
   }
 };
 
+template <class T>
+static inline T inl_value_or(boost::optional<T> x, T y)
+{
+	/* some ancient boost lacks value_or--rhel6? */
+	if (x)
+		return x.get();
+	else
+		return y;
+}
+
 template <class T, class K>
 class RGWBucketSyncSingleEntryCR : public RGWCoroutine {
   RGWDataSyncEnv *sync_env;
@@ -2177,7 +2187,8 @@ public:
                                                       marker_tracker(_marker_tracker),
                                                       sync_status(0) {
     stringstream ss;
-    ss << bucket_shard_str{bs} << "/" << key << "[" << versioned_epoch.value_or(0) << "]";
+    ss << bucket_shard_str{bs} << "/" << key
+	   << "[" << inl_value_or(versioned_epoch, 0UL) << "]";
     set_description() << "bucket sync single entry (source_zone=" << sync_env->source_zone << ") b=" << ss.str() << " log_entry=" << entry_marker << " op=" << (int)op << " op_state=" << (int)op_state;
     ldout(sync_env->cct, 20) << "bucket sync single entry (source_zone=" << sync_env->source_zone << ") b=" << ss.str() << " log_entry=" << entry_marker << " op=" << (int)op << " op_state=" << (int)op_state << dendl;
     set_status("init");
@@ -2203,7 +2214,8 @@ public:
           if (op == CLS_RGW_OP_ADD ||
               op == CLS_RGW_OP_LINK_OLH) {
             set_status("syncing obj");
-            ldout(sync_env->cct, 5) << "bucket sync: sync obj: " << sync_env->source_zone << "/" << bucket_info->bucket << "/" << key << "[" << versioned_epoch.value_or(0) << "]" << dendl;
+            ldout(sync_env->cct, 5) << "bucket sync: sync obj: " << sync_env->source_zone << "/" << bucket_info->bucket << "/" << key
+									<< "[" << inl_value_or(versioned_epoch, 0UL) << "]" << dendl;
             logger.log("fetch");
             call(new RGWFetchRemoteObjCR(sync_env->async_rados, sync_env->store, sync_env->source_zone, *bucket_info,
                                          key, versioned_epoch,
@@ -2214,12 +2226,14 @@ public:
               versioned = true;
             }
             logger.log("remove");
-            call(new RGWRemoveObjCR(sync_env->async_rados, sync_env->store, sync_env->source_zone, *bucket_info, key, versioned, versioned_epoch.value_or(0), NULL, NULL, false, &timestamp));
+            call(new RGWRemoveObjCR(sync_env->async_rados, sync_env->store, sync_env->source_zone, *bucket_info, key, versioned, inl_value_or(versioned_epoch, 0UL), NULL, NULL, false, &timestamp));
           } else if (op == CLS_RGW_OP_LINK_OLH_DM) {
             logger.log("creating delete marker");
             set_status("creating delete marker");
-            ldout(sync_env->cct, 10) << "creating delete marker: obj: " << sync_env->source_zone << "/" << bucket_info->bucket << "/" << key << "[" << versioned_epoch.value_or(0) << "]" << dendl;
-            call(new RGWRemoveObjCR(sync_env->async_rados, sync_env->store, sync_env->source_zone, *bucket_info, key, versioned, versioned_epoch.value_or(0), &owner.id, &owner.display_name, true, &timestamp));
+            ldout(sync_env->cct, 10) << "creating delete marker: obj: " << sync_env->source_zone << "/" << bucket_info->bucket << "/" << key << "["
+									 << inl_value_or(versioned_epoch, 0UL) << "]" << dendl;
+            call(new RGWRemoveObjCR(sync_env->async_rados, sync_env->store, sync_env->source_zone, *bucket_info, key, versioned,
+									inl_value_or(versioned_epoch, 0UL), &owner.id, &owner.display_name, true, &timestamp));
           }
         }
       } while (marker_tracker->need_retry(key));
