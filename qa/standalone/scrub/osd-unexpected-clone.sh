@@ -26,7 +26,6 @@ function run() {
     export CEPH_ARGS
     CEPH_ARGS+="--fsid=$(uuidgen) --auth-supported=none "
     CEPH_ARGS+="--mon-host=$CEPH_MON "
-    CEPH_ARGS+="--osd-objectstore-fuse "
 
     local funcs=${@:-$(set | sed -n -e 's/^\(TEST_[0-9a-z_]*\) .*/\1/p')}
     for func in $funcs ; do
@@ -50,29 +49,35 @@ function TEST_recover_unexpected() {
     rados -p foo mksnap snap
     rados -p foo put foo /etc/motd
 
-    cp $dir/1/fuse/1.0_head/all/#1\:602f83fe\:\:\:foo\:1#/attr/_ _
-    cp $dir/1/fuse/1.0_head/all/#1\:602f83fe\:\:\:foo\:1#/data data
+    wait_for_clean || return 1
+
+    local osd=$(get_primary foo foo)
+
+    JSON=`objectstore_tool $dir $osd --op list foo | grep snapid.:1`
+    echo "JSON is $JSON"
+    rm -f _ data
+    objectstore_tool $dir $osd "$JSON" get-attr _ > _
+    objectstore_tool $dir $osd "$JSON" get-bytes data
 
     rados -p foo rmsnap snap
 
     sleep 5
 
-    primary=1
-    mkdir $dir/$primary/fuse/1.0_head/all/#1\:602f83fe\:\:\:foo\:1#
-    cat data > $dir/$primary/fuse/1.0_head/all/#1\:602f83fe\:\:\:foo\:1#/data
-    cat _ > $dir/$primary/fuse/1.0_head/all/#1\:602f83fe\:\:\:foo\:1#/attr/_
+    objectstore_tool $dir $osd "$JSON" set-bytes data
+    objectstore_tool $dir $osd "$JSON" set-attr _ _
 
     sleep 5
 
-    ceph pg scrub 1.0
     ceph pg repair 1.0
 
     sleep 10
 
+    ceph log last
+
     # make sure osds are still up
-    ceph tell osd.0 version
-    ceph tell osd.1 version
-    ceph tell osd.2 version
+    timeout 60 ceph tell osd.0 version || return 1
+    timeout 60 ceph tell osd.1 version || return 1
+    timeout 60 ceph tell osd.2 version || return 1
 }
 
 
