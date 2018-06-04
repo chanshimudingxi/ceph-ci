@@ -50,7 +50,6 @@ function TEST_recover_unexpected() {
     rados -p foo mksnap snap
     rados -p foo put foo /etc/motd
 
-    find $dir
     cp $dir/1/fuse/1.0_head/all/#1\:602f83fe\:\:\:foo\:1#/attr/_ _
     cp $dir/1/fuse/1.0_head/all/#1\:602f83fe\:\:\:foo\:1#/data data
 
