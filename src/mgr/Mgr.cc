@@ -175,7 +175,8 @@ std::map<std::string, std::string> Mgr::load_store()
 
     const std::string config_prefix = PyModule::config_prefix;
 
-    if (key.substr(0, config_prefix.size()) == config_prefix) {
+    if (key.substr(0, config_prefix.size()) == config_prefix ||
+	key.find("device/") == 0) {
       dout(20) << "fetching '" << key << "'" << dendl;
       Command get_cmd;
       std::ostringstream cmd_json;
