@@ -264,6 +264,28 @@ void Mgr::init()
   py_module_registry->upgrade_config(monc, kv_store);
   lock.Lock();
 
+  // populate persistent device metadata
+  for (auto p = kv_store.lower_bound("device/");
+       p != kv_store.end();
+       ++p) {
+    if (p->first.find("device/") != 0) {
+      break;
+    }
+    string devid = p->first.substr(7);
+    map<string,string> meta;
+    ostringstream ss;
+    int r = get_json_str_map(p->second, ss, &meta, false);
+    if (r < 0) {
+      derr << __func__ << " failed to parse " << p->first << ": " << ss.str()
+	   << dendl;
+    } else {
+      daemon_state.with_device_create(
+	devid, [&meta] (DeviceState& dev) {
+	  dev.set_metadata(std::move(meta));
+	});
+    }
+  }
+
   // assume finisher already initialized in background_init
   dout(4) << "starting python modules..." << dendl;
   py_module_registry->active_start(daemon_state, cluster_state,
