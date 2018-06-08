@@ -104,9 +104,11 @@ void MetadataUpdate::finish(int r)
         }
         daemon_meta.erase("hostname");
         state->metadata.clear();
+	map<string,string> m;
         for (const auto &i : daemon_meta) {
-          state->metadata[i.first] = i.second.get_str();
-        }
+          m[i.first] = i.second.get_str();
+	}
+	state->set_metadata(m);
       } else {
         state = std::make_shared<DaemonState>(daemon_state.types);
         state->key = key;
@@ -119,9 +121,11 @@ void MetadataUpdate::finish(int r)
         }
         daemon_meta.erase("hostname");
 
+	map<string,string> m;
         for (const auto &i : daemon_meta) {
-          state->metadata[i.first] = i.second.get_str();
+          m[i.first] = i.second.get_str();
         }
+	state->set_metadata(m);
 
         daemon_state.insert(state);
       }
@@ -171,7 +175,8 @@ std::map<std::string, std::string> Mgr::load_store()
 
     const std::string config_prefix = PyModule::config_prefix;
 
-    if (key.substr(0, config_prefix.size()) == config_prefix) {
+    if (key.substr(0, config_prefix.size()) == config_prefix ||
+	key.find("device/") == 0) {
       dout(20) << "fetching '" << key << "'" << dendl;
       Command get_cmd;
       std::ostringstream cmd_json;
@@ -180,8 +185,9 @@ std::map<std::string, std::string> Mgr::load_store()
       lock.Unlock();
       get_cmd.wait();
       lock.Lock();
-      assert(get_cmd.r == 0);
-      loaded[key] = get_cmd.outbl.to_str();
+      if (get_cmd.r == 0) { // tolerate racing config-key change
+	loaded[key] = get_cmd.outbl.to_str();
+      }
     }
   }
 
@@ -257,6 +263,28 @@ void Mgr::init()
   lock.Unlock();
   py_module_registry->upgrade_config(monc, kv_store);
   lock.Lock();
+
+  // populate persistent device metadata
+  for (auto p = kv_store.lower_bound("device/");
+       p != kv_store.end();
+       ++p) {
+    if (p->first.find("device/") != 0) {
+      break;
+    }
+    string devid = p->first.substr(7);
+    map<string,string> meta;
+    ostringstream ss;
+    int r = get_json_str_map(p->second, ss, &meta, false);
+    if (r < 0) {
+      derr << __func__ << " failed to parse " << p->first << ": " << ss.str()
+	   << dendl;
+    } else {
+      daemon_state.with_device_create(
+	devid, [&meta] (DeviceState& dev) {
+	  dev.set_metadata(std::move(meta));
+	});
+    }
+  }
 
   // assume finisher already initialized in background_init
   dout(4) << "starting python modules..." << dendl;
@@ -349,9 +377,11 @@ void Mgr::load_all_metadata()
     osd_metadata.erase("id");
     osd_metadata.erase("hostname");
 
+    map<string,string> m;
     for (const auto &i : osd_metadata) {
-      dm->metadata[i.first] = i.second.get_str();
+      m[i.first] = i.second.get_str();
     }
+    dm->set_metadata(m);
 
     daemon_state.insert(dm);
   }
