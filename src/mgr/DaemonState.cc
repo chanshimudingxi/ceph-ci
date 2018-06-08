@@ -14,11 +14,82 @@
 #include "DaemonState.h"
 
 #include "MgrSession.h"
+#include "include/stringify.h"
+#include "common/Formatter.h"
 
 #define dout_context g_ceph_context
 #define dout_subsys ceph_subsys_mgr
 #undef dout_prefix
 #define dout_prefix *_dout << "mgr " << __func__ << " "
+
+void DeviceState::set_metadata(map<string,string>&& m)
+{
+  metadata = std::move(m);
+  auto p = metadata.find("expected_failure");
+  if (p != metadata.end()) {
+    expected_failure.parse(p->second);
+  }
+  p = metadata.find("expected_failure_stamp");
+  if (p != metadata.end()) {
+    expected_failure_stamp.parse(p->second);
+  }
+}
+
+void DeviceState::set_expected_failure(utime_t when, utime_t now)
+{
+  expected_failure = when;
+  expected_failure_stamp = now;
+  metadata["expected_failure"] = stringify(expected_failure);
+  metadata["expected_failure_stamp"] = stringify(expected_failure_stamp);
+}
+
+void DeviceState::rm_expected_failure()
+{
+  expected_failure = utime_t();
+  expected_failure_stamp = utime_t();
+  metadata.erase("expected_failure");
+  metadata.erase("expected_failure_stamp");
+}
+
+void DeviceState::dump(Formatter *f) const
+{
+  f->dump_string("devid", devid);
+  f->open_array_section("location");
+  for (auto& i : devnames) {
+    f->open_object_section("attachment");
+    f->dump_string("host", i.first);
+    f->dump_string("dev", i.second);
+    f->close_section();
+  }
+  f->close_section();
+  f->open_array_section("daemons");
+  for (auto& i : daemons) {
+    f->dump_string("daemon", to_string(i));
+  }
+  f->close_section();
+  if (expected_failure != utime_t()) {
+    f->dump_stream("expected_failure") << expected_failure;
+    f->dump_stream("expected_failure_stamp")
+      << expected_failure_stamp;
+  }
+}
+
+void DeviceState::print(ostream& out) const
+{
+  out << "device " << devid << "\n";
+  for (auto& i : devnames) {
+    out << "attachment " << i.first << ":" << i.second << "\n";
+  }
+  set<string> d;
+  for (auto& j : daemons) {
+    d.insert(to_string(j));
+  }
+  out << "daemons " << d << "\n";
+  if (expected_failure != utime_t()) {
+    out << "expected_failure " << expected_failure
+	<< " (as of " << expected_failure_stamp << ")\n";
+  }
+}
 
 void DaemonStateIndex::insert(DaemonStatePtr dm)
 {
@@ -30,6 +101,12 @@ void DaemonStateIndex::insert(DaemonStatePtr dm)
 
   by_server[dm->hostname][dm->key] = dm;
   all[dm->key] = dm;
+
+  for (auto& i : dm->devices) {
+    auto d = _get_or_create_device(i.first);
+    d->daemons.insert(dm->key);
+    d->devnames.insert(make_pair(dm->hostname, i.second));
+  }
 }
 
 void DaemonStateIndex::_erase(const DaemonKey& dmk)
@@ -39,6 +116,17 @@ void DaemonStateIndex::_erase(const DaemonKey& dmk)
   const auto to_erase = all.find(dmk);
   assert(to_erase != all.end());
   const auto dm = to_erase->second;
+
+  for (auto& i : dm->devices) {
+    auto d = _get_or_create_device(i.first);
+    assert(d->daemons.count(dmk));
+    d->daemons.erase(dmk);
+    d->devnames.erase(make_pair(dm->hostname, i.second));
+    if (d->empty()) {
+      _erase_device(d);
+    }
+  }
+
   auto &server_collection = by_server[dm->hostname];
   server_collection.erase(dm->key);
   if (server_collection.empty()) {
