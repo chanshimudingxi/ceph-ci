@@ -67,6 +67,23 @@ if(WITH_MGR)
   elseif(NOT WITH_PYTHON3 AND MGR_PYTHON_VERSION_MAJOR EQUAL 3)
     message(FATAL_ERROR "mgr plugins require python3 binding")
   endif()
+
+  if (USE_OPENSSL)
+    execute_process(
+      COMMAND ${PYTHON${PYTHON_VERSION}_EXECUTABLE} -c "import ssl; print('.'.join(map(str,ssl.OPENSSL_VERSION_INFO[0:3])))"
+      RESULT_VARIABLE PYSSL_RESULT
+      OUTPUT_VARIABLE PYSSL_VER
+      ERROR_QUIET
+      )
+    if (NOT ${PYSSL_RESULT})
+      if (NOT (OPENSSL_VERSION VERSION_EQUAL PYSSL_VER))
+        message(FATAL_ERROR "Python and Ceph link to different openssl versions: ${PYSSL_VER} vs ${OPENSSL_VERSION}")
+      endif()
+    else()
+      message(WARNING "could not determine ssl version of python crypto lib")
+    endif()
+  endif(USE_OPENSSL)
+
   # Location needs to match default setting for mgr_module_path, currently:
   # OPTION(mgr_module_path, OPT_STR, CEPH_PKGLIBDIR "/mgr")
   install(DIRECTORY
