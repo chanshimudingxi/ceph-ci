@@ -168,7 +168,14 @@ function teardown() {
         fi
     fi
     if [ "$cores" = "yes" -o "$dumplogs" = "1" ]; then
-        display_logs $dir
+	if [ -n "$LOCALRUN" ]; then
+	    display_logs $dir
+        else
+	    # Move logs to where Teuthology will archive it
+	    # HACK: This path should come from teuthology code
+	    mkdir -p /home/ubuntu/cephtest/archive/log
+	    mv $dir/*.log /home/ubuntu/cephtest/archive/log
+	fi
     fi
     rm -fr $dir
     rm -rf $(get_asok_dir)
