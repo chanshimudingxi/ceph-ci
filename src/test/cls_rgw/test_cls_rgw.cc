@@ -373,6 +373,335 @@ TEST(cls_rgw, index_suggest)
   test_stats(ioctx, bucket_oid, 0, num_objs / 2, total_size);
 }
 
+
+TEST(cls_rgw, index_suggest1)
+{
+  // case 1: PUT Op fail to complete, index_suggest should recover the index
+  string bucket_oid = str_int("bucket", 4);
+  OpMgr mgr;
+
+  ObjectWriteOperation *op = mgr.write_op();
+  cls_rgw_bucket_init(*op);
+  ASSERT_EQ(0, ioctx.operate(bucket_oid, op));
+
+  //int epoch = 0;
+  uint64_t obj_size = 1024;
+
+  uint64_t num_entries = 0;
+  uint64_t total_size = 0;
+
+  string obj = str_int("obj", 1);
+  string tag = str_int("tag", 1);
+  string loc = str_int("loc", 1);
+  index_prepare(mgr, ioctx, bucket_oid, CLS_RGW_OP_ADD, tag, obj, loc);
+  test_stats(ioctx, bucket_oid, 0, num_entries, total_size);
+
+  rgw_bucket_dir_entry dirent;
+  dirent.key.name = obj;
+  dirent.locator = loc;
+  dirent.exists = true;
+  dirent.meta.size = 1024;
+  dirent.meta.accounted_size = 1024;
+
+  bufferlist updates;
+  cls_rgw_encode_suggestion(CEPH_RGW_UPDATE, dirent, updates);
+  num_entries += 1;
+  total_size += obj_size;
+
+  map<int, string> bucket_objs;
+  bucket_objs[0] = bucket_oid;
+  int r = CLSRGWIssueSetTagTimeout(ioctx, bucket_objs, 8 /* max aio */, 1)();
+  ASSERT_EQ(0, r);
+
+  sleep(1);
+
+  /* suggest changes! */
+  op = mgr.write_op();
+  cls_rgw_suggest_changes(*op, updates);
+  ASSERT_EQ(0, ioctx.operate(bucket_oid, op));
+
+  test_stats(ioctx, bucket_oid, 0, num_entries, total_size);
+}
+
+TEST(cls_rgw, index_suggest2)
+{
+  // case 2: list op raced with put op, index_suggest should not delete index
+  string bucket_oid = str_int("bucket", 5);
+  OpMgr mgr;
+
+  ObjectWriteOperation *op = mgr.write_op();
+  cls_rgw_bucket_init(*op);
+  ASSERT_EQ(0, ioctx.operate(bucket_oid, op));
+
+  int epoch = 0;
+  uint64_t obj_size = 1024;
+
+  uint64_t num_entries = 0;
+  uint64_t total_size = 0;
+
+  string obj = str_int("obj", 1);
+  string tag = str_int("tag", 1);
+  string loc = str_int("loc", 1);
+
+  // PUT op
+  index_prepare(mgr, ioctx, bucket_oid, CLS_RGW_OP_ADD, tag, obj, loc);
+  test_stats(ioctx, bucket_oid, 0, num_entries, total_size);
+
+  rgw_bucket_dir_entry_meta meta;
+  meta.category = 0;
+  meta.size = obj_size;
+  total_size += meta.size;
+  num_entries += 1;
+
+  index_complete(mgr, ioctx, bucket_oid, CLS_RGW_OP_ADD, tag, ++epoch, obj, meta);
+  test_stats(ioctx, bucket_oid, 0, num_entries, total_size);
+
+  /*
+   * 1.list after index prepare
+   * 2.check_disk_state before write head obj
+   * 3.aio_operate dir_suggest_changes after index complete
+   */
+  rgw_bucket_dir_entry dirent;
+
+  bufferlist updates;
+  cls_rgw_encode_suggestion(CEPH_RGW_REMOVE, dirent, updates);
+
+  /* suggest changes! */
+  op = mgr.write_op();
+  cls_rgw_suggest_changes(*op, updates);
+  ASSERT_EQ(0, ioctx.operate(bucket_oid, op));
+
+  test_stats(ioctx, bucket_oid, 0, num_entries, total_size);
+}
+
+TEST(cls_rgw, index_suggest3)
+{
+  // case 3: list op raced with del op, index_suggest should not recover put index
+  string bucket_oid = str_int("bucket", 6);
+  OpMgr mgr;
+
+  ObjectWriteOperation *op = mgr.write_op();
+  cls_rgw_bucket_init(*op);
+  ASSERT_EQ(0, ioctx.operate(bucket_oid, op));
+
+  int epoch = 0;
+  uint64_t obj_size = 1024;
+
+  uint64_t num_entries = 0;
+  uint64_t total_size = 0;
+
+  string obj = str_int("obj", 1);
+  string tag = str_int("tag", 1);
+  string loc = str_int("loc", 1);
+
+  // first PUT op
+  index_prepare(mgr, ioctx, bucket_oid, CLS_RGW_OP_ADD, tag, obj, loc);
+  test_stats(ioctx, bucket_oid, 0, num_entries, total_size);
+
+  rgw_bucket_dir_entry_meta meta;
+  meta.category = 0;
+  meta.size = obj_size;
+  total_size += meta.size;
+  num_entries += 1;
+
+  index_complete(mgr, ioctx, bucket_oid, CLS_RGW_OP_ADD, tag, ++epoch, obj, meta);
+  test_stats(ioctx, bucket_oid, 0, num_entries, total_size);
+
+  // second DEL op
+  index_prepare(mgr, ioctx, bucket_oid, CLS_RGW_OP_DEL, tag, obj, loc);
+  test_stats(ioctx, bucket_oid, 0, num_entries, total_size);
+
+  rgw_bucket_dir_entry_meta meta2;
+  num_entries -= 1;
+  total_size -= obj_size;
+
+  index_complete(mgr, ioctx, bucket_oid, CLS_RGW_OP_DEL, tag, ++epoch, obj, meta2);
+  test_stats(ioctx, bucket_oid, 0, num_entries, total_size);
+
+  /* 1.list after del op index prepare
+   * 2.check_disk_state before delete head obj
+   * 3.aio_operate dir_suggest_changes after index complete
+   */
+  rgw_bucket_dir_entry dirent;
+  dirent.key.name = obj;
+  dirent.locator = loc;
+  dirent.exists = true;
+  dirent.meta.size = 1024;
+  dirent.meta.accounted_size = 1024;
+
+  bufferlist updates;
+  cls_rgw_encode_suggestion(CEPH_RGW_UPDATE, dirent, updates);
+
+  /* suggest changes! */
+  op = mgr.write_op();
+  cls_rgw_suggest_changes(*op, updates);
+  ASSERT_EQ(0, ioctx.operate(bucket_oid, op));
+
+  test_stats(ioctx, bucket_oid, 0, num_entries, total_size);
+}
+
+/*
+ * This case is used to test whether get_obj_vals will
+ * return all validate utf8 objnames and filter out those
+ * in BI_PREFIX_CHAR private namespace.
+ */
+TEST(cls_rgw, index_list)
+{
+  string bucket_oid = str_int("bucket", 7);
+
+  OpMgr mgr;
+
+  ObjectWriteOperation *op = mgr.write_op();
+  cls_rgw_bucket_init(*op);
+  ASSERT_EQ(0, ioctx.operate(bucket_oid, op));
+
+  uint64_t epoch = 1;
+  uint64_t obj_size = 1024;
+  const int num_objs = 5;
+  const string keys[num_objs] = {
+    /* single byte utf8 character */
+    { static_cast<char>(0x41) },
+    /* double byte utf8 character */
+    { static_cast<char>(0xCF), static_cast<char>(0x8F) },
+    /* treble byte utf8 character */
+    { static_cast<char>(0xDF), static_cast<char>(0x8F), static_cast<char>(0x8F) },
+    /* quadruble byte utf8 character */
+    { static_cast<char>(0xF7), static_cast<char>(0x8F), static_cast<char>(0x8F), static_cast<char>(0x8F) },
+    /* BI_PREFIX_CHAR private namespace, for test only */
+    { static_cast<char>(0x80), static_cast<char>(0x41) }
+  };
+
+  for (int i = 0; i < num_objs; i++) {
+    string obj = keys[i];
+    string tag = str_int("tag", i);
+    string loc = str_int("loc", i);
+
+    index_prepare(mgr, ioctx, bucket_oid, CLS_RGW_OP_ADD, tag, obj, loc);
+
+    op = mgr.write_op();
+    rgw_bucket_dir_entry_meta meta;
+    meta.category = 0;
+    meta.size = obj_size;
+    index_complete(mgr, ioctx, bucket_oid, CLS_RGW_OP_ADD, tag, epoch, obj, meta);
+  }
+
+  test_stats(ioctx, bucket_oid, 0, num_objs, obj_size * num_objs);
+
+  map<int, string> oids = { {0, bucket_oid} };
+  map<int, struct rgw_cls_list_ret> list_results;
+  cls_rgw_obj_key start_key("", "");
+  int r = CLSRGWIssueBucketList(ioctx, start_key, "", 1000, true, oids, list_results, 1)();
+
+  ASSERT_EQ(r, 0);
+  ASSERT_EQ(1, list_results.size());
+
+  auto it = list_results.begin();
+  auto m = (it->second).dir.m;
+
+  ASSERT_EQ(4, m.size());
+  int i = 0;
+  for(auto it2 = m.begin(); it2 != m.end(); it2++, i++)
+    ASSERT_EQ(it2->first.compare(keys[i]), 0);
+}
+
+
+TEST(cls_rgw, bi_list)
+{
+  string bucket_oid = str_int("bucket", 8);
+
+ CephContext *cct = reinterpret_cast<CephContext *>(ioctx.cct());
+
+  OpMgr mgr;
+
+  ObjectWriteOperation *op = mgr.write_op();
+  cls_rgw_bucket_init(*op);
+  ASSERT_EQ(0, ioctx.operate(bucket_oid, op));
+
+  string name;
+  string marker;
+  uint64_t max = 10;
+  list<rgw_cls_bi_entry> entries;
+  bool is_truncated;
+
+  int ret = cls_rgw_bi_list(ioctx, bucket_oid, name, marker, max, &entries,
+			    &is_truncated);
+  ASSERT_EQ(ret, 0);
+  ASSERT_EQ(entries.size(), 0);
+  ASSERT_EQ(is_truncated, false);
+
+  uint64_t epoch = 1;
+  uint64_t obj_size = 1024;
+  uint64_t num_objs = 35;
+
+  for (uint64_t i = 0; i < num_objs; i++) {
+    string obj = str_int("obj", i);
+    string tag = str_int("tag", i);
+    string loc = str_int("loc", i);
+    index_prepare(mgr, ioctx, bucket_oid, CLS_RGW_OP_ADD, tag, obj, loc, RGW_BILOG_FLAG_VERSIONED_OP);
+    op = mgr.write_op();
+    rgw_bucket_dir_entry_meta meta;
+    meta.category = 0;
+    meta.size = obj_size;
+    index_complete(mgr, ioctx, bucket_oid, CLS_RGW_OP_ADD, tag, epoch, obj, meta, RGW_BILOG_FLAG_VERSIONED_OP);
+  }
+
+  ret = cls_rgw_bi_list(ioctx, bucket_oid, name, marker, num_objs + 10, &entries,
+			    &is_truncated);
+  ASSERT_EQ(ret, 0);
+  if (cct->_conf->osd_max_omap_entries_per_request < num_objs) {
+    ASSERT_EQ(entries.size(), cct->_conf->osd_max_omap_entries_per_request);
+  } else {
+    ASSERT_EQ(entries.size(), num_objs);
+  }
+
+  uint64_t num_entries = 0;
+
+  is_truncated = true;
+  while(is_truncated) {
+    ret = cls_rgw_bi_list(ioctx, bucket_oid, name, marker, max, &entries,
+			  &is_truncated);
+    ASSERT_EQ(ret, 0);
+    if (is_truncated) {
+      ASSERT_EQ(entries.size(), std::min(max, cct->_conf->osd_max_omap_entries_per_request));
+    } else {
+      ASSERT_EQ(entries.size(), num_objs - num_entries);
+    }
+    num_entries += entries.size();
+    marker = entries.back().idx;
+  }
+
+  ret = cls_rgw_bi_list(ioctx, bucket_oid, name, marker, max, &entries,
+			&is_truncated);
+  ASSERT_EQ(ret, 0);
+  ASSERT_EQ(entries.size(), 0);
+  ASSERT_EQ(is_truncated, false);
+
+  if (cct->_conf->osd_max_omap_entries_per_request < 15) {
+    num_entries = 0;
+    max = 15;
+    is_truncated = true;
+    marker.clear();
+    while(is_truncated) {
+      ret = cls_rgw_bi_list(ioctx, bucket_oid, name, marker, max, &entries,
+			    &is_truncated);
+      ASSERT_EQ(ret, 0);
+      if (is_truncated) {
+	ASSERT_EQ(entries.size(), cct->_conf->osd_max_omap_entries_per_request);
+      } else {
+	ASSERT_EQ(entries.size(), num_objs - num_entries);
+      }
+      num_entries += entries.size();
+      marker = entries.back().idx;
+    }
+  }
+
+  ret = cls_rgw_bi_list(ioctx, bucket_oid, name, marker, max, &entries,
+			&is_truncated);
+  ASSERT_EQ(ret, 0);
+  ASSERT_EQ(entries.size(), 0);
+  ASSERT_EQ(is_truncated, false);
+}
+
 /* test garbage collection */
 static void create_obj(cls_rgw_obj& obj, int i, int j)
 {
