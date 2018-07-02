@@ -31,7 +31,6 @@
 
 #include "include/assert.h"
 #include "include/unordered_map.h"
-#include "include/memory.h"
 #include "include/mempool.h"
 #include "common/bloom_filter.hpp"
 #include "common/Finisher.h"
@@ -132,8 +131,8 @@ class BlueStore : public ObjectStore,
 public:
   // config observer
   const char** get_tracked_conf_keys() const override;
-  void handle_conf_change(const struct md_config_t *conf,
-                                  const std::set<std::string> &changed) override;
+  void handle_conf_change(const md_config_t *conf,
+			  const std::set<std::string> &changed) override;
 
   //handler for discard event
   void handle_discard(interval_set<uint64_t>& to_release);
@@ -1869,7 +1868,6 @@ private:
   deque<TransContext*> kv_queue_unsubmitted; ///< ready, need submit by kv thread
   deque<TransContext*> kv_committing;        ///< currently syncing
   deque<DeferredBatch*> deferred_done_queue;   ///< deferred ios done
-  deque<DeferredBatch*> deferred_stable_queue; ///< deferred ios done + stable
 
   KVFinalizeThread kv_finalize_thread;
   std::mutex kv_finalize_lock;

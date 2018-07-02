@@ -2978,8 +2978,10 @@ Dentry* Client::link(Dir *dir, const string& name, Inode *in, Dentry *dn)
   }
 
   if (in) {    // link to inode
+    InodeRef tmp_ref;
     // only one parent for directories!
     if (in->is_dir() && !in->dentries.empty()) {
+      tmp_ref = in; // prevent unlink below from freeing the inode.
       Dentry *olddn = in->get_first_parent();
       assert(olddn->dir != dir || olddn->name != name);
       Inode *old_diri = olddn->dir->parent_inode;
@@ -13938,7 +13940,7 @@ const char** Client::get_tracked_conf_keys() const
   return keys;
 }
 
-void Client::handle_conf_change(const struct md_config_t *conf,
+void Client::handle_conf_change(const md_config_t *conf,
 				const std::set <std::string> &changed)
 {
   Mutex::Locker lock(client_lock);

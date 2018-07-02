@@ -555,6 +555,10 @@ std::vector<Option> get_global_options() {
     .add_service({"mon", "mgr", "osd", "mds"})
     .add_tag("service"),
 
+    Option("crash_dir", Option::TYPE_STR, Option::LEVEL_ADVANCED)
+    .set_default("/var/lib/ceph/crash")
+    .set_description("Directory where crash reports are archived"),
+
     // restapi
     Option("restapi_log_level", Option::TYPE_STR, Option::LEVEL_ADVANCED)
     .set_description("default set by python code"),
@@ -1042,6 +1046,10 @@ std::vector<Option> get_global_options() {
     .set_default(4096)
     .set_description(""),
 
+    Option("ms_async_rdma_support_srq", Option::TYPE_BOOL, Option::LEVEL_ADVANCED)
+    .set_default(true)
+    .set_description(""),
+
     Option("ms_async_rdma_port_num", Option::TYPE_UINT, Option::LEVEL_ADVANCED)
     .set_default(1)
     .set_description(""),
@@ -1064,6 +1072,14 @@ std::vector<Option> get_global_options() {
 
     Option("ms_async_rdma_dscp", Option::TYPE_INT, Option::LEVEL_ADVANCED)
     .set_default(96)
+    .set_description(""),
+
+    Option("ms_async_rdma_cm", Option::TYPE_BOOL, Option::LEVEL_ADVANCED)
+    .set_default(false)
+    .set_description(""),
+
+    Option("ms_async_rdma_type", Option::TYPE_STR, Option::LEVEL_ADVANCED)
+    .set_default("ib")
     .set_description(""),
 
     Option("ms_dpdk_port_id", Option::TYPE_INT, Option::LEVEL_ADVANCED)
@@ -4767,7 +4783,7 @@ std::vector<Option> get_global_options() {
     .set_description("Filesystem path to manager modules."),
 
     Option("mgr_initial_modules", Option::TYPE_STR, Option::LEVEL_BASIC)
-    .set_default("restful status balancer iostat")
+    .set_default("restful status balancer iostat devicehealth")
     .set_flag(Option::FLAG_NO_MON_UPDATE)
     .set_flag(Option::FLAG_CLUSTER_CREATE)
     .add_service("mon")
@@ -4894,6 +4910,10 @@ std::vector<Option> get_global_options() {
     Option("debug_asserts_on_shutdown", Option::TYPE_BOOL,Option::LEVEL_DEV)
     .set_default(false)
     .set_description("Enable certain asserts to check for refcounting bugs on shutdown; see http://tracker.ceph.com/issues/21738"),
+
+    Option("debug_asok_assert_abort", Option::TYPE_BOOL, Option::LEVEL_DEV)
+    .set_default(false)
+    .set_description("allow commands 'assert' and 'abort' via asok for testing crash dumps etc"),
   });
 }
 

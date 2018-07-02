@@ -96,6 +96,18 @@ protected:
   uint64_t l0_granularity = 0; // space per entry
   uint64_t l1_granularity = 0; // space per entry
 
+  size_t partial_l1_count = 0;
+  size_t unalloc_l1_count = 0;
+
+  double get_fragmentation() const {
+    double res = 0.0;
+    auto total = unalloc_l1_count + partial_l1_count;
+    if (total) {
+      res = double(partial_l1_count) / double(total);
+    }
+    return res;
+  }
+
   uint64_t _level_granularity() const override
   {
     return l1_granularity;
@@ -122,6 +134,7 @@ class AllocatorLevel01Loose : public AllocatorLevel01
     L1_ENTRY_MASK = (1 << L1_ENTRY_WIDTH) - 1,
     L1_ENTRY_FULL = 0x00,
     L1_ENTRY_PARTIAL = 0x01,
+    L1_ENTRY_NOT_USED = 0x02,
     L1_ENTRY_FREE = 0x03,
     CHILD_PER_SLOT = bits_per_slot / L1_ENTRY_WIDTH, // 32
     CHILD_PER_SLOT_L0 = bits_per_slot, // 64
@@ -265,11 +278,13 @@ protected:
     l1.resize(slot_count, mark_as_free ? all_slot_set : all_slot_clear);
 
     // l0 slot count
-    slot_count = aligned_capacity / _alloc_unit / bits_per_slot;
+    size_t slot_count_l0 = aligned_capacity / _alloc_unit / bits_per_slot;
     // we use set bit(s) as a marker for (partially) free entry
-    l0.resize(slot_count, mark_as_free ? all_slot_set : all_slot_clear);
+    l0.resize(slot_count_l0, mark_as_free ? all_slot_set : all_slot_clear);
 
+    partial_l1_count = unalloc_l1_count = 0;
     if (mark_as_free) {
+      unalloc_l1_count = slot_count * _children_per_slot();
       auto l0_pos_no_use = p2roundup((int64_t)capacity, (int64_t)l0_granularity) / l0_granularity;
       _mark_alloc_l1_l0(l0_pos_no_use, aligned_capacity / l0_granularity);
     }
@@ -390,10 +405,10 @@ protected:
     uint64_t* allocated,
     interval_vector_t* res);
 
-  uint64_t _mark_alloc_l1(const interval_t& r)
+  uint64_t _mark_alloc_l1(uint64_t offset, uint64_t length)
   {
-    uint64_t l0_pos_start = r.offset / l0_granularity;
-    uint64_t l0_pos_end = p2roundup(r.offset + r.length, l0_granularity) / l0_granularity;
+    uint64_t l0_pos_start = offset / l0_granularity;
+    uint64_t l0_pos_end = p2roundup(offset + length, l0_granularity) / l0_granularity;
     _mark_alloc_l1_l0(l0_pos_start, l0_pos_end);
     return l0_granularity * (l0_pos_end - l0_pos_start);
   }
@@ -710,7 +725,7 @@ protected:
     uint64_t l2_pos_end = p2roundup(int64_t(o + len), int64_t(l2_granularity)) / l2_granularity;
 
     std::lock_guard<std::mutex> l(lock);
-    auto allocated = l1._mark_alloc_l1(interval_t(o, len));
+    auto allocated = l1._mark_alloc_l1(o, len);
     assert(available >= allocated);
     available -= allocated;
     _mark_l2_on_l1(l2_pos, l2_pos_end);
@@ -728,6 +743,10 @@ protected:
   void _shutdown()
   {
     last_pos = 0;
+  }
+  double _get_fragmentation() {
+    std::lock_guard<std::mutex> l(lock);
+    return l1.get_fragmentation();
   }
 };
 

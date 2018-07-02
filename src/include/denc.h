@@ -41,7 +41,6 @@
 #include "include/assert.h"	// boost clobbers this
 #include "include/intarith.h"
 #include "include/int_types.h"
-#include "include/memory.h"
 
 #include "buffer.h"
 #include "byteorder.h"
@@ -1094,8 +1093,8 @@ public:
   static void bound_encode(const container& s, size_t& p, uint64_t f = 0) {
     if constexpr (traits::bounded) {
       if constexpr (traits::featured) {
-        size_t elem_size = 0;
         if (!s.empty()) {
+          size_t elem_size = 0;
           denc(*s.begin(), elem_size, f);
           p += elem_size * s.size();
         }

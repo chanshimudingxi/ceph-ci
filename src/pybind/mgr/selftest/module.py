@@ -67,7 +67,7 @@ class Module(MgrModule):
         self._event = threading.Event()
         self._workload = None
 
-    def handle_command(self, command):
+    def handle_command(self, inbuf, command):
         if command['prefix'] == 'mgr self-test run':
             self._self_test()
             return 0, '', 'Self-test succeeded'
@@ -163,11 +163,8 @@ class Module(MgrModule):
         self.set_store("testkey", "testvalue")
         assert self.get_store("testkey") == "testvalue"
 
-        self.set_store_json("testjsonkey", {"testblob": 2})
-        assert self.get_store_json("testjsonkey") == {"testblob": 2}
-
         assert sorted(self.get_store_prefix("test").keys()) == sorted(
-                list({"testkey", "testjsonkey"} | existing_keys))
+                list({"testkey"} | existing_keys))
 
 
     def _self_test_perf_counters(self):

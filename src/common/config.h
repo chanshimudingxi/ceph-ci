@@ -22,9 +22,10 @@
 #include "common/code_environment.h"
 #include "common/Mutex.h"
 #include "log/SubsystemMap.h"
-#include "common/config_obs.h"
 #include "common/options.h"
 #include "common/subsys_types.h"
+#include "common/config_fwd.h"
+#include "common/lock_mutex.h"
 
 class CephContext;
 
@@ -39,6 +40,8 @@ enum {
 };
 
 extern const char *ceph_conf_level_name(int level);
+
+namespace ceph::internal {
 
 /** This class represents the current Ceph configuration.
  *
@@ -69,7 +72,8 @@ extern const char *ceph_conf_level_name(int level);
  * FIXME: really we shouldn't allow changing integer or floating point values
  * while another thread is reading them, either.
  */
-struct md_config_t {
+template<LockPolicy lock_policy>
+struct md_config_impl {
 public:
   typedef boost::variant<int64_t md_config_t::*,
                          uint64_t md_config_t::*,
@@ -87,7 +91,7 @@ public:
   const bool is_daemon;
 
   /* Maps configuration options to the observer listening for them. */
-  typedef std::multimap <std::string, md_config_obs_t*> obs_map_t;
+  typedef std::multimap <std::string, md_config_obs_impl<lock_policy>*> obs_map_t;
 
   /* Set of configuration options that have changed since the last
    * apply_changes */
@@ -96,7 +100,7 @@ public:
   /*
    * Mapping from legacy config option names to class members
    */
-  std::map<std::string, md_config_t::member_ptr_t> legacy_values;
+  std::map<std::string, md_config_impl::member_ptr_t> legacy_values;
 
   /**
    * The configuration schema, in the form of Option objects describing
@@ -111,6 +115,9 @@ public:
 
   /// values from mon that we failed to set
   std::map<std::string,std::string> ignored_mon_values;
+
+  /// original raw values saved that may need to re-expand at certain time
+  mutable std::map<std::string, std::string> may_reexpand_meta;
 
   /// encoded, cached copy of of values + ignored_mon_values
   bufferlist values_bl;
@@ -127,8 +134,8 @@ public:
   } opt_type_t;
 
   // Create a new md_config_t structure.
-  explicit md_config_t(bool is_daemon=false);
-  ~md_config_t();
+  explicit md_config_impl(bool is_daemon=false);
+  ~md_config_impl();
 
   // Adds a new observer to this configuration. You can do this at any time,
   // but it will only receive notifications for the changes that happen after
@@ -138,14 +145,14 @@ public:
   // but before anyone can call injectargs.
   //
   // The caller is responsible for allocating observers.
-  void add_observer(md_config_obs_t* observer_);
+  void add_observer(md_config_obs_impl<lock_policy>* observer_);
 
   // Remove an observer from this configuration.
   // This doesn't delete the observer! If you allocated it with new(),
   // you need to delete it yourself.
   // This function will assert if you try to delete an observer that isn't
   // there.
-  void remove_observer(md_config_obs_t* observer_);
+  void remove_observer(md_config_obs_impl<lock_policy>* observer_);
 
   // Parse a config file
   int parse_config_files(const char *conf_files,
@@ -297,7 +304,7 @@ private:
 
   void update_legacy_vals();
   void update_legacy_val(const Option &opt,
-      md_config_t::member_ptr_t member);
+      md_config_impl::member_ptr_t member);
 
   Option::value_t _expand_meta(
     const Option::value_t& in,
@@ -308,6 +315,9 @@ private:
 public:  // for global_init
   void early_expand_meta(std::string &val,
 			 std::ostream *oss) const;
+
+  // for those want to reexpand special meta, e.g, $pid
+  void finalize_reexpand_meta();
 private:
 
   /// expand all metavariables in config structure.
@@ -388,15 +398,18 @@ public:
    * recursive, for simplicity.
    * It is best if this lock comes first in the lock hierarchy. We will
    * hold this lock when calling configuration observers.  */
-  mutable Mutex lock;
+  LockMutex<lock_policy> lock;
 
   friend class test_md_config_t;
 };
 
+template<LockPolicy lp>
 template<typename T>
-const T md_config_t::get_val(const std::string &key) const {
+const T md_config_impl<lp>::get_val(const std::string &key) const {
   return boost::get<T>(this->get_val_generic(key));
 }
+
+} // namespace ceph::internal
 
 inline std::ostream& operator<<(std::ostream& o, const boost::blank& ) {
       return o << "INVALID_CONFIG_VALUE";

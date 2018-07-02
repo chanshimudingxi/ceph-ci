@@ -409,6 +409,7 @@ Context *OpenRequest<I>::handle_v2_get_data_pool(int *result) {
       send_close_image(*result);
       return nullptr;
     }
+    m_image_ctx->data_ctx.set_namespace(m_image_ctx->md_ctx.get_namespace());
   }
 
   m_image_ctx->init_layout();
@@ -515,8 +516,9 @@ Context *OpenRequest<I>::send_set_snap(int *result) {
                                        m_image_ctx->snap_name);
   }
   if (snap_id == CEPH_NOSNAP) {
-    *result = -ENOENT;
-    return m_on_finish;
+    lderr(cct) << "failed to find snapshot " << m_image_ctx->snap_name << dendl;
+    send_close_image(-ENOENT);
+    return nullptr;
   }
 
   using klass = OpenRequest<I>;

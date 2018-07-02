@@ -434,7 +434,7 @@ prepare_conf() {
         heartbeat file = $CEPH_OUT_DIR/\$name.heartbeat
 "
 
-    local mgr_modules="restful status balancer iostat"
+    local mgr_modules="restful status balancer iostat devicehealth"
     if $with_mgr_dashboard; then
       mgr_modules="dashboard $mgr_modules"
     fi
@@ -458,8 +458,10 @@ prepare_conf() {
         plugin dir = $CEPH_LIB
         filestore fd cache size = 32
         run dir = $CEPH_OUT_DIR
+	crash dir = $CEPH_OUT_DIR
         enable experimental unrecoverable data corrupting features = *
 	osd_crush_chooseleaf_type = 0
+	debug asok assert abort = true
 $extra_conf
 EOF
 	if [ "$lockdep" -eq 1 ] ; then
@@ -710,7 +712,7 @@ EOF
 
     # setting login credentials for dashboard
     if $with_mgr_dashboard; then
-        ceph_adm tell mgr dashboard set-login-credentials admin admin
+        ceph_adm tell mgr dashboard ac-user-create admin admin administrator
         if ! ceph_adm tell mgr dashboard create-self-signed-cert;  then
             echo dashboard module not working correctly!
         fi

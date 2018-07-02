@@ -1237,8 +1237,7 @@ bool DaemonServer::handle_command(MCommand *m)
 		auto p = pg_map.osd_stat.find(osd);
 		if (p == pg_map.osd_stat.end()) {
 		  missing_stats.insert(osd);
-		}
-		if (p->second.num_pgs > 0) {
+		} else if (p->second.num_pgs > 0) {
 		  stored_pgs.insert(osd);
 		}
 	      }
@@ -1979,7 +1978,8 @@ bool DaemonServer::handle_command(MCommand *m)
     }
 
     std::stringstream ds;
-    int r = py_modules.handle_command(handler_name, cmdctx->cmdmap, &ds, &ss);
+    bufferlist inbl = cmdctx->m->get_data();
+    int r = py_modules.handle_command(handler_name, cmdctx->cmdmap, inbl, &ds, &ss);
     cmdctx->odata.append(ds);
     cmdctx->reply(r, ss);
   }));
@@ -2193,8 +2193,8 @@ const char** DaemonServer::get_tracked_conf_keys() const
   return KEYS;
 }
 
-void DaemonServer::handle_conf_change(const struct md_config_t *conf,
-                                              const std::set <std::string> &changed)
+void DaemonServer::handle_conf_change(const md_config_t *conf,
+				      const std::set <std::string> &changed)
 {
   // We may be called within lock (via MCommand `config set`) or outwith the
   // lock (via admin socket `config set`), so handle either case.

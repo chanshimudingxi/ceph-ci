@@ -46,7 +46,6 @@
 #include <atomic>
 #include <map>
 #include <memory>
-#include "include/memory.h"
 
 #include "include/unordered_map.h"
 
@@ -1231,7 +1230,7 @@ class OSD : public Dispatcher,
 public:
   // config observer bits
   const char** get_tracked_conf_keys() const override;
-  void handle_conf_change(const struct md_config_t *conf,
+  void handle_conf_change(const md_config_t *conf,
                           const std::set <std::string> &changed) override;
   void update_log_config();
   void check_config();
@@ -2208,7 +2207,7 @@ private:
 
   float get_osd_recovery_sleep();
 
-  void probe_smart(ostream& ss);
+  void probe_smart(const string& devid, ostream& ss);
   int probe_smart_device(const char *device, int timeout, std::string *result);
 
 public:

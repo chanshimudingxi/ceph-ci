@@ -62,7 +62,7 @@ ThreadPool::~ThreadPool()
   delete[] _conf_keys;
 }
 
-void ThreadPool::handle_conf_change(const struct md_config_t *conf,
+void ThreadPool::handle_conf_change(const md_config_t *conf,
 				    const std::set <std::string> &changed)
 {
   if (changed.count(_thread_num_option)) {
@@ -157,11 +157,12 @@ void ThreadPool::start_threads()
     ldout(cct, 10) << "start_threads creating and starting " << wt << dendl;
     _threads.insert(wt);
 
+    wt->create(thread_name.c_str());
+
     int r = wt->set_ioprio(ioprio_class, ioprio_priority);
     if (r < 0)
       lderr(cct) << " set_ioprio got " << cpp_strerror(r) << dendl;
 
-    wt->create(thread_name.c_str());
   }
 }
 

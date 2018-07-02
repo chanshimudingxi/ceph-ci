@@ -297,11 +297,6 @@ if(HAVE_XIO)
   list(APPEND EXTRALIBS ${XIO_LIBRARY} pthread)
 endif(HAVE_XIO)
 
-if(HAVE_RDMA)
-  set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -I${RDMA_INCLUDE_DIR}")
-  list(APPEND EXTRALIBS ${RDMA_LIBRARIES} pthread)
-endif(HAVE_RDMA)
-
 # sort out which allocator to use
 if(ALLOCATOR STREQUAL "tcmalloc")
   set(ALLOC_LIBS ${GPERFTOOLS_TCMALLOC_LIBRARY})
@@ -409,22 +404,14 @@ if(HAVE_RDMA)
   list(APPEND async_rdma_common_srcs
     msg/async/rdma/Infiniband.cc
     msg/async/rdma/RDMAConnectedSocketImpl.cc
+    msg/async/rdma/RDMAIWARPConnectedSocketImpl.cc
     msg/async/rdma/RDMAServerSocketImpl.cc
+    msg/async/rdma/RDMAIWARPServerSocketImpl.cc
     msg/async/rdma/RDMAStack.cc)
-endif(HAVE_RDMA)
+endif()
 
 add_library(common_buffer_obj OBJECT
   common/buffer.cc)
-
-if(WITH_SEASTAR)
-  add_library(seastar_buffer_obj OBJECT common/buffer_seastar.cc)
-  # target_link_libraries() doesn't work for object libraries, so the
-  # Seastar properties are applied manually (and link is unnecessary)
-  target_compile_definitions(seastar_buffer_obj
-    PUBLIC $<TARGET_PROPERTY:Seastar::seastar,INTERFACE_COMPILE_DEFINITIONS>)
-  target_include_directories(seastar_buffer_obj
-    PUBLIC $<TARGET_PROPERTY:Seastar::seastar,INTERFACE_INCLUDE_DIRECTORIES>)
-endif()
 
 add_library(common_texttable_obj OBJECT
   common/TextTable.cc)
@@ -663,8 +650,11 @@ set(ceph_common_deps
 if(HAVE_UDEV)
   list(APPEND ceph_common_deps ${UDEV_LIBRARIES})
 endif()
-if(HAVE_RDMA)
-  list(APPEND ceph_common_deps ${RDMA_LIBRARY})
+if(HAVE_VERBS)
+  list(APPEND ceph_common_deps IBVerbs::verbs)
+endif()
+if(HAVE_RDMACM)
+  list(APPEND ceph_common_deps RDMA::RDMAcm)
 endif()
 if(NOT WITH_SYSTEM_BOOST)
   list(APPEND ceph_common_deps ${ZLIB_LIBRARIES})
@@ -790,8 +780,7 @@ endif (WITH_MGR)
 set(librados_config_srcs
   librados-config.cc)
 add_executable(librados-config ${librados_config_srcs})
-target_link_libraries(librados-config librados global ${BLKID_LIBRARIES} ${RDMA_LIBRARIES}
-  ${CMAKE_DL_LIBS})
+target_link_libraries(librados-config librados global ${BLKID_LIBRARIES} ${CMAKE_DL_LIBS})
 
 install(TARGETS librados-config DESTINATION bin)
 
@@ -897,8 +886,8 @@ set(ceph_osd_srcs
   ceph_osd.cc)
 add_executable(ceph-osd ${ceph_osd_srcs})
 add_dependencies(ceph-osd erasure_code_plugins)
-target_link_libraries(ceph-osd osd os global-static ceph-common
-  ${BLKID_LIBRARIES} ${RDMA_LIBRARIES})
+target_link_libraries(ceph-osd osd os global-static common
+  ${BLKID_LIBRARIES})
 if(WITH_FUSE)
   target_link_libraries(ceph-osd ${FUSE_LIBRARIES})
 endif()

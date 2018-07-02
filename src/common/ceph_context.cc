@@ -35,6 +35,8 @@
 
 #include "auth/Crypto.h"
 #include "include/str_list.h"
+#include "common/config.h"
+#include "common/config_obs.h"
 #include "common/PluginRegistry.h"
 #include "common/valgrind.h"
 #include "include/spinlock.h"
@@ -391,6 +393,12 @@ void CephContext::do_command(std::string_view command, const cmdmap_t& cmdmap,
   }
   lgeneric_dout(this, 1) << "do_command '" << command << "' '"
 			 << ss.str() << dendl;
+  if (command == "assert" && _conf->debug_asok_assert_abort) {
+    assert(0 == "assert");
+  }
+  if (command == "abort" && _conf->debug_asok_assert_abort) {
+    abort();
+  }
   if (command == "perfcounters_dump" || command == "1" ||
       command == "perf dump") {
     std::string logger;
@@ -582,6 +590,8 @@ CephContext::CephContext(uint32_t module_type_,
   _plugin_registry = new PluginRegistry(this);
 
   _admin_hook = new CephContextHook(this);
+  _admin_socket->register_command("assert", "assert", _admin_hook, "");
+  _admin_socket->register_command("abort", "abort", _admin_hook, "");
   _admin_socket->register_command("perfcounters_dump", "perfcounters_dump", _admin_hook, "");
   _admin_socket->register_command("1", "1", _admin_hook, "");
   _admin_socket->register_command("perf dump", "perf dump name=logger,type=CephString,req=false name=counter,type=CephString,req=false", _admin_hook, "dump perfcounters value");

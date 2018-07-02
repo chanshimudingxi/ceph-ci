@@ -312,7 +312,8 @@ class MgrModule(ceph_module.BaseMgrModule):
 
         :param str data_name: Valid things to fetch are osd_crush_map_text, 
                 osd_map, osd_map_tree, osd_map_crush, config, mon_map, fs_map,
-                osd_metadata, pg_summary, io_rate, pg_dump, df, osd_stats, health, mon_status.
+                osd_metadata, pg_summary, io_rate, pg_dump, df, osd_stats,
+                health, mon_status, devices, device <devid>.
 
         Note:
             All these structures have their own JSON representations: experiment
@@ -364,7 +365,7 @@ class MgrModule(ceph_module.BaseMgrModule):
         :param width: the width of the terminal
         """
         n = len(elems)
-        column_width = width / n
+        column_width = int(width / n)
 
         ret = '|'
         for elem in elems:
@@ -380,7 +381,7 @@ class MgrModule(ceph_module.BaseMgrModule):
         :param width: the width of the terminal
         """
         n = len(elems)
-        column_width = width / n
+        column_width = int(width / n)
 
         # dash line
         ret = '+'
@@ -516,7 +517,7 @@ class MgrModule(ceph_module.BaseMgrModule):
         """
         self._ceph_set_health_checks(checks)
 
-    def handle_command(self, cmd):
+    def handle_command(self, inbuf, cmd):
         """
         Called by ceph-mgr to request the plugin to handle one
         of the commands that it declared in self.COMMANDS
@@ -525,6 +526,7 @@ class MgrModule(ceph_module.BaseMgrModule):
         output string.  The output buffer is for data results,
         the output string is for informative text.
 
+        :param string inbuf: content of any "-i <file>" supplied to ceph cli
         :param dict cmd: from Ceph's cmdmap_t
 
         :return: 3-tuple of (int, str, str)
@@ -621,28 +623,6 @@ class MgrModule(ceph_module.BaseMgrModule):
         """
         self._validate_option(key)
         return self._set_localized(key, val, self._set_config)
-
-    def set_store_json(self, key, val):
-        """
-        Helper for setting json-serialized stored data
-
-        :param str key:
-        :param val: json-serializable object
-        """
-        self.set_store(key, json.dumps(val))
-
-    def get_store_json(self, key):
-        """
-        Helper for getting json-serialized stored data
-
-        :param str key:
-        :return: object
-        """
-        raw = self.get_store(key)
-        if raw is None:
-            return None
-        else:
-            return json.loads(raw)
 
     def set_store(self, key, val):
         """

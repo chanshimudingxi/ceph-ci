@@ -18,6 +18,7 @@
 #include <memory>
 #include <errno.h>
 #include <cstdio>
+#include "common/config_obs.h"
 #include "common/hobject.h"
 #include "common/Mutex.h"
 #include "common/Cond.h"
@@ -70,7 +71,7 @@ public:
     cct->_conf->remove_observer(this);
     delete[] registry;
   }
-  typedef ceph::shared_ptr<FD> FDRef;
+  typedef std::shared_ptr<FD> FDRef;
 
   FDRef lookup(const ghobject_t &hoid) {
     int registry_id = hoid.hobj.get_hash() % registry_shards;

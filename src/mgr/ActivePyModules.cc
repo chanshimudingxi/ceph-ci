@@ -281,10 +281,10 @@ PyObject *ActivePyModules::get_python(const std::string &what)
     return f.get();
   } else if (what == "pg_dump") {
     PyFormatter f;
-        cluster_state.with_pgmap(
-        [&f](const PGMap &pg_map) {
-	  pg_map.dump(&f);
-        }
+    cluster_state.with_pgmap(
+      [&f](const PGMap &pg_map) {
+	pg_map.dump(&f);
+      }
     );
     return f.get();
   } else if (what == "devices") {
@@ -294,6 +294,14 @@ PyObject *ActivePyModules::get_python(const std::string &what)
 	f.dump_object("device", dev);
       });
     f.close_section();
+    return f.get();
+  } else if (what.size() > 7 &&
+	     what.substr(0, 7) == "device ") {
+    string devid = what.substr(7);
+    PyFormatter f;
+    daemon_state.with_device(devid, [&f] (const DeviceState& dev) {
+	f.dump_object("device", dev);
+      });
     return f.get();
   } else if (what == "io_rate") {
     PyFormatter f;
@@ -774,6 +782,7 @@ void ActivePyModules::set_health_checks(const std::string& module_name,
 int ActivePyModules::handle_command(
   std::string const &module_name,
   const cmdmap_t &cmdmap,
+  const bufferlist &inbuf,
   std::stringstream *ds,
   std::stringstream *ss)
 {
@@ -785,7 +794,7 @@ int ActivePyModules::handle_command(
   }
 
   lock.Unlock();
-  return mod_iter->second->handle_command(cmdmap, ds, ss);
+  return mod_iter->second->handle_command(cmdmap, inbuf, ds, ss);
 }
 
 void ActivePyModules::get_health_checks(health_check_map_t *checks)

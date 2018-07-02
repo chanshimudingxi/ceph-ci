@@ -3828,7 +3828,7 @@ const char **BlueStore::get_tracked_conf_keys() const
   return KEYS;
 }
 
-void BlueStore::handle_conf_change(const struct md_config_t *conf,
+void BlueStore::handle_conf_change(const md_config_t *conf,
 				   const std::set<std::string> &changed)
 {
   if (changed.count("bluestore_csum_type")) {
@@ -4132,11 +4132,11 @@ void BlueStore::_init_logger()
   b.add_u64_counter(l_bluestore_compress_rejected_count, "compress_rejected_count",
     "Sum for compress ops rejected due to low net gain of space");
   b.add_u64_counter(l_bluestore_write_pad_bytes, "write_pad_bytes",
-		    "Sum for write-op padded bytes", NULL, 0, unit_t(BYTES));
+		    "Sum for write-op padded bytes", NULL, 0, unit_t(UNIT_BYTES));
   b.add_u64_counter(l_bluestore_deferred_write_ops, "deferred_write_ops",
 		    "Sum for deferred write op");
   b.add_u64_counter(l_bluestore_deferred_write_bytes, "deferred_write_bytes",
-		    "Sum for deferred write bytes", "def", 0, unit_t(BYTES));
+		    "Sum for deferred write bytes", "def", 0, unit_t(UNIT_BYTES));
   b.add_u64_counter(l_bluestore_write_penalty_read_ops, "write_penalty_read_ops",
 		    "Sum for write penalty read ops");
   b.add_u64(l_bluestore_allocated, "bluestore_allocated",
@@ -4168,22 +4168,22 @@ void BlueStore::_init_logger()
   b.add_u64(l_bluestore_buffers, "bluestore_buffers",
 	    "Number of buffers in cache");
   b.add_u64(l_bluestore_buffer_bytes, "bluestore_buffer_bytes",
-	    "Number of buffer bytes in cache", NULL, 0, unit_t(BYTES));
+	    "Number of buffer bytes in cache", NULL, 0, unit_t(UNIT_BYTES));
   b.add_u64(l_bluestore_buffer_hit_bytes, "bluestore_buffer_hit_bytes",
-	    "Sum for bytes of read hit in the cache", NULL, 0, unit_t(BYTES));
+	    "Sum for bytes of read hit in the cache", NULL, 0, unit_t(UNIT_BYTES));
   b.add_u64(l_bluestore_buffer_miss_bytes, "bluestore_buffer_miss_bytes",
-	    "Sum for bytes of read missed in the cache", NULL, 0, unit_t(BYTES));
+	    "Sum for bytes of read missed in the cache", NULL, 0, unit_t(UNIT_BYTES));
 
   b.add_u64_counter(l_bluestore_write_big, "bluestore_write_big",
 		    "Large aligned writes into fresh blobs");
   b.add_u64_counter(l_bluestore_write_big_bytes, "bluestore_write_big_bytes",
-		    "Large aligned writes into fresh blobs (bytes)", NULL, 0, unit_t(BYTES));
+		    "Large aligned writes into fresh blobs (bytes)", NULL, 0, unit_t(UNIT_BYTES));
   b.add_u64_counter(l_bluestore_write_big_blobs, "bluestore_write_big_blobs",
 		    "Large aligned writes into fresh blobs (blobs)");
   b.add_u64_counter(l_bluestore_write_small, "bluestore_write_small",
 		    "Small writes into existing or sparse small blobs");
   b.add_u64_counter(l_bluestore_write_small_bytes, "bluestore_write_small_bytes",
-		    "Small writes into existing or sparse small blobs (bytes)", NULL, 0, unit_t(BYTES));
+		    "Small writes into existing or sparse small blobs (bytes)", NULL, 0, unit_t(UNIT_BYTES));
   b.add_u64_counter(l_bluestore_write_small_unused,
 		    "bluestore_write_small_unused",
 		    "Small writes into unused portion of existing blob");
@@ -4780,7 +4780,7 @@ int BlueStore::_open_db(bool create, bool to_repair_db)
   string fn = path + "/db";
   string options;
   stringstream err;
-  ceph::shared_ptr<Int64ArrayMergeOperator> merge_op(new Int64ArrayMergeOperator);
+  std::shared_ptr<Int64ArrayMergeOperator> merge_op(new Int64ArrayMergeOperator);
 
   string kv_backend;
   std::vector<KeyValueDB::ColumnFamily> cfs;
@@ -9008,6 +9008,7 @@ void BlueStore::_kv_stop()
 void BlueStore::_kv_sync_thread()
 {
   dout(10) << __func__ << " start" << dendl;
+  deque<DeferredBatch*> deferred_stable_queue; ///< deferred ios done + stable
   std::unique_lock<std::mutex> l(kv_lock);
   assert(!kv_sync_started);
   kv_sync_started = true;
@@ -9462,14 +9463,15 @@ void BlueStore::_deferred_aio_finish(OpSequencer *osr)
 
   {
     uint64_t costs = 0;
-    std::lock_guard<std::mutex> l2(osr->qlock);
-    for (auto& i : b->txcs) {
-      TransContext *txc = &i;
-      txc->log_state_latency(logger, l_bluestore_state_deferred_aio_wait_lat);
-      txc->state = TransContext::STATE_DEFERRED_CLEANUP;
-      costs += txc->cost;
+    {
+      std::lock_guard<std::mutex> l2(osr->qlock);
+      for (auto& i : b->txcs) {
+	TransContext *txc = &i;
+	txc->log_state_latency(logger, l_bluestore_state_deferred_aio_wait_lat);
+	txc->state = TransContext::STATE_DEFERRED_CLEANUP;
+	costs += txc->cost;
+      }
     }
-    osr->qcond.notify_all();
     throttle_deferred_bytes.put(costs);
     std::lock_guard<std::mutex> l(kv_lock);
     deferred_done_queue.emplace_back(b);
