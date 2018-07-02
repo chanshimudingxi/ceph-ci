@@ -616,20 +616,15 @@ float OSDService::get_failsafe_full_ratio()
   return full_ratio;
 }
 
-void OSDService::check_full_status(float ratio)
+OSDService::s_names OSDService::recalc_full_state(float ratio, string &inject)
 {
-  Mutex::Locker l(full_status_lock);
-
-  cur_ratio = ratio;
-
   // The OSDMap ratios take precendence.  So if the failsafe is .95 and
   // the admin sets the cluster full to .96, the failsafe moves up to .96
   // too.  (Not that having failsafe == full is ideal, but it's better than
   // dropping writes before the clusters appears full.)
   OSDMapRef osdmap = get_osdmap();
   if (!osdmap || osdmap->get_epoch() == 0) {
-    cur_state = NONE;
-    return;
+    return NONE;
   }
   float nearfull_ratio = osdmap->get_nearfull_ratio();
   float backfillfull_ratio = std::max(osdmap->get_backfillfull_ratio(), nearfull_ratio);
@@ -653,27 +648,32 @@ void OSDService::check_full_status(float ratio)
     nearfull_ratio = failsafe_ratio;
   }
 
+  if (injectfull_state > NONE && injectfull) {
+    inject = "(Injected)";
+    return injectfull_state;
+  } else if (ratio > failsafe_ratio) {
+    return FAILSAFE;
+  } else if (ratio > full_ratio) {
+    return FULL;
+  } else if (ratio > backfillfull_ratio) {
+    return BACKFILLFULL;
+  } else if (ratio > nearfull_ratio) {
+    return NEARFULL;
+  }
+   return NONE;
+}
+
+void OSDService::check_full_status(float ratio)
+{
+  Mutex::Locker l(full_status_lock);
+
+  cur_ratio = ratio;
+
   string inject;
   s_names new_state;
-  if (injectfull_state > NONE && injectfull) {
-    new_state = injectfull_state;
-    inject = "(Injected)";
-  } else if (ratio > failsafe_ratio) {
-    new_state = FAILSAFE;
-  } else if (ratio > full_ratio) {
-    new_state = FULL;
-  } else if (ratio > backfillfull_ratio) {
-    new_state = BACKFILLFULL;
-  } else if (ratio > nearfull_ratio) {
-    new_state = NEARFULL;
-  } else {
-    new_state = NONE;
-  }
+  new_state = recalc_full_state(ratio, inject);
+
   dout(20) << __func__ << " cur ratio " << ratio
-	   << ". nearfull_ratio " << nearfull_ratio
-	   << ". backfillfull_ratio " << backfillfull_ratio
-	   << ", full_ratio " << full_ratio
-	   << ", failsafe_ratio " << failsafe_ratio
 	   << ", new state " << get_full_state_name(new_state)
 	   << " " << inject
 	   << dendl;
@@ -716,10 +716,8 @@ bool OSDService::need_fullness_update()
   return want != cur;
 }
 
-bool OSDService::_check_full(DoutPrefixProvider *dpp, s_names type) const
+bool OSDService::_check_inject_full(DoutPrefixProvider *dpp, s_names type) const
 {
-  Mutex::Locker l(full_status_lock);
-
   if (injectfull && injectfull_state >= type) {
     // injectfull is either a count of the number of times to return failsafe full
     // or if -1 then always return full
@@ -730,10 +728,47 @@ bool OSDService::_check_full(DoutPrefixProvider *dpp, s_names type) const
              << dendl;
     return true;
   }
+  return false;
+}
+
+bool OSDService::_check_full(DoutPrefixProvider *dpp, s_names type) const
+{
+  Mutex::Locker l(full_status_lock);
+
+  if (_check_inject_full(dpp, type))
+    return true;
+
   if (cur_state >= type)
     ldpp_dout(dpp, 10) << __func__ << " current usage is " << cur_ratio << dendl;
 
   return cur_state >= type;
+}
+
+bool OSDService::_tentative_full(DoutPrefixProvider *dpp, s_names type, int64_t adjust_used)
+{
+  ldpp_dout(dpp, 20) << __func__ << " type " << get_full_state_name(type) << " adjust_used " << adjust_used << dendl;
+  {
+    Mutex::Locker l(full_status_lock);
+    if (_check_inject_full(dpp, type)) {
+      return true;
+    }
+  }
+
+  Mutex::Locker l(stat_lock);
+  osd_stat_t adjusted_stat = osd_stat;
+  ldpp_dout(dpp, 20) << __func__ << " Before kb_used " << adjusted_stat.kb_used << dendl;
+  adjusted_stat.kb_used += adjust_used;
+  ldpp_dout(dpp, 20) << __func__ << " After kb_used " << adjusted_stat.kb_used << dendl;
+
+  float ratio = compute_adjusted_ratio(adjusted_stat);
+
+  string notused;
+  s_names tentative_state = recalc_full_state(ratio, notused);
+
+  if (tentative_state >= type)
+    ldpp_dout(dpp, 10) << __func__ << " tenatative usage is " << ratio << dendl;
+
+  return tentative_state >= type;
 }
 
 bool OSDService::check_failsafe_full(DoutPrefixProvider *dpp) const
@@ -744,6 +779,11 @@ bool OSDService::check_failsafe_full(DoutPrefixProvider *dpp) const
 bool OSDService::check_full(DoutPrefixProvider *dpp) const
 {
   return _check_full(dpp, FULL);
+}
+
+bool OSDService::tentative_backfill_full(DoutPrefixProvider *dpp, int64_t adjust_used)
+{
+  return _tentative_full(dpp, BACKFILLFULL, adjust_used);
 }
 
 bool OSDService::check_backfill_full(DoutPrefixProvider *dpp) const
@@ -811,6 +851,24 @@ osd_stat_t OSDService::set_osd_stat(const struct store_statfs_t &stbuf,
   }
 }
 
+float OSDService::compute_adjusted_ratio(osd_stat_t new_stat)
+{
+  // Check all pgs and adjust kb_used to include all pending backfill data
+  int backfill_adjusted = 0;
+  vector<PGRef> pgs;
+  osd->_get_pgs(&pgs);
+  for (auto p : pgs) {
+    backfill_adjusted += p->pg_stat_adjust(new_stat);
+  }
+  if (backfill_adjusted) {
+    // After adjusting kb_used we could have overcommitted. Compression?
+    if (new_stat.kb_used > new_stat.kb)
+      new_stat.kb_used = new_stat.kb;
+    dout(20) << __func__ << " backfill adjusted " << new_stat << dendl;
+  }
+  return ((float)new_stat.kb_used) / ((float)new_stat.kb);
+}
+
 void OSDService::update_osd_stat(vector<int>& hb_peers)
 {
   // load osd stats first
@@ -824,7 +882,9 @@ void OSDService::update_osd_stat(vector<int>& hb_peers)
   auto new_stat = set_osd_stat(stbuf, hb_peers, osd->num_pgs);
   dout(20) << "update_osd_stat " << new_stat << dendl;
   assert(new_stat.kb);
-  float ratio = ((float)new_stat.kb_used) / ((float)new_stat.kb);
+
+  float ratio = compute_adjusted_ratio(new_stat);
+
   check_full_status(ratio);
 }
 

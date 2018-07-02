@@ -881,6 +881,7 @@ public:
   osd_stat_t osd_stat;
   uint32_t seq = 0;
 
+  float compute_adjusted_ratio(osd_stat_t new_stat);
   void update_osd_stat(vector<int>& hb_peers);
   osd_stat_t set_osd_stat(const struct store_statfs_t &stbuf,
                           vector<int>& hb_peers,
@@ -930,11 +931,15 @@ private:
   mutable int64_t injectfull = 0;
   s_names injectfull_state = NONE;
   float get_failsafe_full_ratio();
-  void check_full_status(float ratio);
+  bool _check_inject_full(DoutPrefixProvider *dpp, s_names type) const;
   bool _check_full(DoutPrefixProvider *dpp, s_names type) const;
 public:
+  s_names recalc_full_state(float ratio, string &inject);
+  void check_full_status(float ratio);
+  bool _tentative_full(DoutPrefixProvider *dpp, s_names type, int64_t adjust_used);
   bool check_failsafe_full(DoutPrefixProvider *dpp) const;
   bool check_full(DoutPrefixProvider *dpp) const;
+  bool tentative_backfill_full(DoutPrefixProvider *dpp, int64_t adjust_used);
   bool check_backfill_full(DoutPrefixProvider *dpp) const;
   bool check_nearfull(DoutPrefixProvider *dpp) const;
   bool is_failsafe_full() const;
