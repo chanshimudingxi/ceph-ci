@@ -44,6 +44,7 @@
     "@angular/platform-browser": "6.0.6",
     "@angular/platform-browser-dynamic": "6.0.6",
     "@angular/router": "6.0.6",
+    "@auth0/angular-jwt": "2.0.0",
     "@swimlane/ngx-datatable": "13.0.1",
     "@types/lodash": "4.14.110",
     "awesome-bootstrap-checkbox": "0.3.7",
