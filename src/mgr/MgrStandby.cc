@@ -46,7 +46,8 @@ MgrStandby::MgrStandby(int argc, const char **argv) :
 		     "mgr",
 		     getpid(),
 		     0)),
-  objecter{g_ceph_context, client_messenger.get(), &monc, NULL, 0, 0},
+  poolctx(cct, ceph::construct_suspended),
+  objecter{g_ceph_context, client_messenger.get(), &monc, poolctx, 0, 0},
   client{client_messenger.get(), &monc, &objecter},
   mgrc(g_ceph_context, client_messenger.get()),
   log_client(g_ceph_context, client_messenger.get(), &monc.monmap, LogClient::NO_FLAGS),
@@ -159,6 +160,7 @@ int MgrStandby::init()
     return r;
   }
 
+  poolctx.start();
   client_t whoami = monc.get_global_id();
   client_messenger->set_myname(entity_name_t::MGR(whoami.v));
   monc.set_log_client(&log_client);
@@ -287,6 +289,7 @@ void MgrStandby::shutdown()
   objecter.shutdown();
   // client_messenger is used by all of them, so stop it in the end
   client_messenger->shutdown();
+  poolctx.finish();
 }
 
 void MgrStandby::respawn()

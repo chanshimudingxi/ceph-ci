@@ -36,6 +36,7 @@
 #include "mon/MonClient.h"
 #include "msg/Dispatcher.h"
 #include "msg/Messenger.h"
+#include "common/asio_misc.h"
 #include "common/Timer.h"
 #include "common/ceph_argparse.h"
 #include "global/global_init.h"
@@ -80,6 +81,7 @@ class TestStub : public Dispatcher
 {
  protected:
   MessengerRef messenger;
+  ceph::io_context_pool poolctx;
   MonClient monc;
 
   Mutex lock;
@@ -161,6 +163,7 @@ class TestStub : public Dispatcher
     monc.shutdown();
     timer.shutdown();
     messenger->shutdown();
+    poolctx.finish();
     return 0;
   }
 
@@ -175,6 +178,7 @@ class TestStub : public Dispatcher
 
   TestStub(CephContext *cct, string who)
     : Dispatcher(cct),
+      poolctx(cct, ceph::construct_suspended),
       monc(cct),
       lock(who.append("::lock").c_str()),
       timer(cct, lock),
@@ -242,6 +246,7 @@ class ClientStub : public TestStub
 
   int init() override {
     int err;
+    poolctx.start();
     err = monc.build_initial_monmap();
     if (err < 0) {
       derr << "ClientStub::" << __func__ << " ERROR: build initial monmap: "
@@ -257,7 +262,7 @@ class ClientStub : public TestStub
     dout(10) << "ClientStub::" << __func__ << " starting messenger at "
 	    << messenger->get_myaddr() << dendl;
 
-    objecter.reset(new Objecter(cct, messenger.get(), &monc, NULL, 0, 0));
+    objecter.reset(new Objecter(cct, messenger.get(), &monc, poolctx, 0, 0));
     assert(objecter.get() != NULL);
     objecter->set_balanced_budget();
 

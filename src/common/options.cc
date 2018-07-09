@@ -4932,6 +4932,12 @@ std::vector<Option> get_global_options() {
     Option("debug_asok_assert_abort", Option::TYPE_BOOL, Option::LEVEL_DEV)
     .set_default(false)
     .set_description("allow commands 'assert' and 'abort' via asok for testing crash dumps etc"),
+
+    Option("osdc_thread_count", Option::TYPE_UINT, Option::LEVEL_ADVANCED)
+    .set_default(8)
+    .set_min(1)
+    .set_description("Size of thread pool for Objecter")
+    .add_tag("client")
   });
 }
 
