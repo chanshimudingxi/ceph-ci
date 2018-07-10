@@ -93,7 +93,6 @@ private:
 
 public:
   ceph::io_context_pool poolctx;
-  Finisher finisher;
 
   explicit RadosClient(CephContext *cct_);
   ~RadosClient() override;

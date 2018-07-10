@@ -79,8 +79,7 @@ librados::RadosClient::RadosClient(CephContext *cct_)
     timer(cct, lock),
     refcnt(1),
     log_last_version(0), log_cb(NULL), log_cb2(NULL), log_cb_arg(NULL),
-    poolctx(cct, ceph::construct_suspended),
-    finisher(cct, "radosclient", "fn-radosclient")
+    poolctx(cct, ceph::construct_suspended)
 {
 }
 
@@ -347,7 +346,6 @@ int librados::RadosClient::connect()
   timer.init();
 
   poolctx.start();
-  finisher.start();
 
   state = CONNECTED;
   instance_id = monclient.get_global_id();
@@ -392,8 +390,6 @@ void librados::RadosClient::shutdown()
       // make sure watch callbacks are flushed
       watch_flush();
     }
-    finisher.wait_for_empty();
-    finisher.stop();
   }
   state = DISCONNECTED;
   instance_id = 0;
@@ -442,7 +438,7 @@ struct CB_aio_watch_flush_Complete {
 
     if (c->callback_complete ||
 	c->callback_safe) {
-      client->finisher.queue(new librados::C_AioComplete(c));
+      boost::asio::dispatch(client->poolctx, librados::CB_AioComplete(c));
     }
     c->put_unlock();
   }
@@ -740,7 +736,7 @@ int librados::RadosClient::pool_create_async(string& name, PoolAsyncCompletionIm
   if (r < 0)
     return r;
 
-  Context *onfinish = new C_PoolAsync_Safe(c);
+  Context *onfinish = make_lambda_context(CB_PoolAsync_Safe(c));
   r = objecter->create_pool(name, onfinish, auid, crush_rule);
   if (r < 0) {
     delete onfinish;
@@ -802,7 +798,7 @@ int librados::RadosClient::pool_delete_async(const char *name, PoolAsyncCompleti
   if (r < 0)
     return r;
 
-  Context *onfinish = new C_PoolAsync_Safe(c);
+  Context *onfinish = make_lambda_context(CB_PoolAsync_Safe(c));
   r = objecter->delete_pool(name, onfinish);
   if (r < 0) {
     delete onfinish;

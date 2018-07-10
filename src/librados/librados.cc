@@ -1997,7 +1997,7 @@ struct AioGetxattrDataPP {
   AioGetxattrDataPP(librados::AioCompletionImpl *c, bufferlist *_bl) :
     bl(_bl), completion(c) {}
   bufferlist *bl;
-  struct librados::C_AioCompleteAndSafe completion;
+  struct librados::CB_AioCompleteAndSafe completion;
 };
 
 static void rados_aio_getxattr_completepp(rados_completion_t c, void *arg) {
@@ -2006,8 +2006,7 @@ static void rados_aio_getxattr_completepp(rados_completion_t c, void *arg) {
   if (rc >= 0) {
     rc = cdata->bl->length();
   }
-  cdata->completion.finish(rc);
-  delete cdata;
+  cdata->completion(rc);
 }
 
 int librados::IoCtx::aio_getxattr(const std::string& oid, librados::AioCompletion *c,
@@ -4987,7 +4986,7 @@ struct AioGetxattrData {
   bufferlist bl;
   char* user_buf;
   size_t len;
-  struct librados::C_AioCompleteAndSafe user_completion;
+  struct librados::CB_AioCompleteAndSafe user_completion;
 };
 
 static void rados_aio_getxattr_complete(rados_completion_t c, void *arg) {
@@ -5002,7 +5001,7 @@ static void rados_aio_getxattr_complete(rados_completion_t c, void *arg) {
       rc = cdata->bl.length();
     }
   }
-  cdata->user_completion.finish(rc);
+  cdata->user_completion(rc);
   delete cdata;
 }
 
@@ -5040,7 +5039,7 @@ struct AioGetxattrsData {
   }
   librados::RadosXattrsIter *it;
   rados_xattrs_iter_t *iter;
-  struct librados::C_AioCompleteAndSafe user_completion;
+  struct librados::CB_AioCompleteAndSafe user_completion;
 };
 }
 
@@ -5048,12 +5047,12 @@ static void rados_aio_getxattrs_complete(rados_completion_t c, void *arg) {
   AioGetxattrsData *cdata = reinterpret_cast<AioGetxattrsData*>(arg);
   int rc = rados_aio_get_return_value(c);
   if (rc) {
-    cdata->user_completion.finish(rc);
+    cdata->user_completion(rc);
   } else {
     cdata->it->i = cdata->it->attrset.begin();
     *cdata->iter = cdata->it;
     cdata->it = 0;
-    cdata->user_completion.finish(0);
+    cdata->user_completion(0);
   }
   delete cdata;
 }

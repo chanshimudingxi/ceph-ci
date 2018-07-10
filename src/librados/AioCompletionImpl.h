@@ -155,14 +155,14 @@ struct librados::AioCompletionImpl {
 };
 
 namespace librados {
-struct C_AioComplete : public Context {
+struct CB_AioComplete {
   AioCompletionImpl *c;
 
-  explicit C_AioComplete(AioCompletionImpl *cc) : c(cc) {
+  explicit CB_AioComplete(AioCompletionImpl *cc) : c(cc) {
     c->_get();
   }
 
-  void finish(int r) override {
+  void operator()() {
     rados_callback_t cb_complete = c->callback_complete;
     void *cb_complete_arg = c->callback_complete_arg;
     if (cb_complete)
@@ -189,14 +189,14 @@ struct C_AioComplete : public Context {
   * flush where we only want to wait for things to be safe,
   * but allow users to specify any of the callbacks.
   */
-struct C_AioCompleteAndSafe : public Context {
+struct CB_AioCompleteAndSafe {
   AioCompletionImpl *c;
 
-  explicit C_AioCompleteAndSafe(AioCompletionImpl *cc) : c(cc) {
+  explicit CB_AioCompleteAndSafe(AioCompletionImpl *cc) : c(cc) {
     c->get();
   }
 
-  void finish(int r) override {
+  void operator()(int r) {
     c->lock.Lock();
     c->rval = r;
     c->complete = true;
@@ -218,8 +218,10 @@ struct C_AioCompleteAndSafe : public Context {
     c->cond.Signal();
     c->put_unlock();
   }
+  void operator()() {
+    (*this)(0);
+  }
 };
-
 }
 
 #endif

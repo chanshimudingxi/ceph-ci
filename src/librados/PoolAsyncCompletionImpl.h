@@ -87,18 +87,18 @@ namespace librados {
     }
   };
 
-  class C_PoolAsync_Safe : public Context {
+  class CB_PoolAsync_Safe {
     PoolAsyncCompletionImpl *c;
 
   public:
-    explicit C_PoolAsync_Safe(PoolAsyncCompletionImpl *_c) : c(_c) {
+    explicit CB_PoolAsync_Safe(PoolAsyncCompletionImpl *_c) : c(_c) {
       c->get();
     }
-    ~C_PoolAsync_Safe() override {
+    ~CB_PoolAsync_Safe() {
       c->put();
     }
-  
-    void finish(int r) override {
+
+    void operator()(int r) {
       c->lock.Lock();
       c->rval = r;
       c->done = true;
