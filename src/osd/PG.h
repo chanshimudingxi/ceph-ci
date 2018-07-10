@@ -1202,6 +1202,10 @@ public:
     return;
   }
 
+  object_stat_collection_t *get_stats() {
+    return &info.stats.stats;
+  }
+
 protected:
 
   /*

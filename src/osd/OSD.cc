@@ -879,6 +879,19 @@ void OSDService::update_osd_stat(vector<int>& hb_peers)
     return;
   }
 
+  // For testing fake statfs values so it doesn't matter if all
+  // OSDs are using the same partition.
+  if (cct->_conf->fake_statfs_for_testing) {
+    uint64_t total_num_bytes = 0;
+    vector<PGRef> pgs;
+    osd->_get_pgs(&pgs);
+    for (auto p : pgs) {
+      total_num_bytes += p->get_stats()->sum.num_bytes;
+    }
+    stbuf.total = cct->_conf->fake_statfs_for_testing;
+    stbuf.available = stbuf.total - total_num_bytes;
+  }
+
   auto new_stat = set_osd_stat(stbuf, hb_peers, osd->num_pgs);
   dout(20) << "update_osd_stat " << new_stat << dendl;
   assert(new_stat.kb);
