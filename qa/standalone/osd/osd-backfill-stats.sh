@@ -158,65 +158,6 @@ function TEST_backfill_sizeup() {
     kill_daemons $dir || return 1
 }
 
-function TEST_backfill_test_oos() {
-    local dir=$1
-    local pool2="${poolname}2"
-
-    run_mon $dir a || return 1
-    run_mgr $dir x || return 1
-    local SAVE_ARGS=$CEPH_ARGS
-    CEPH_ARGS+="--fake_statfs_for_testing=1228800 "
-    export CEPH_ARGS
-    run_osd $dir 0 || return 1
-    run_osd $dir 1 || return 1
-    run_osd $dir 2 || return 1
-    CEPH_ARGS=$SAVE_ARGS
-
-    create_pool $poolname 1 1
-    ceph osd pool set $poolname size 1
-
-    create_pool $pool2 1 1
-    ceph osd pool set $pool2 size 1
-
-    wait_for_clean || return 1
-
-    local PG1=$(get_pg $poolname obj1)
-    local PG2=$(get_pg $pool2 obj1)
-
-    dd if=/dev/urandom of=$dir/datafile bs=1024 count=4
-    for i in $(seq 1 $objects)
-    do
-	rados -p $poolname put obj$i $dir/datafile
-	rados -p $pool2 put obj$i $dir/datafile
-    done
-
-    ceph osd pool set $poolname size 2
-    ceph osd pool set $pool2 size 2
-    sleep 30
-
-    ERRORS=0
-    if [ "$(ceph pg dump pgs | grep +backfill_toofull | wc -l)" != "1" ];
-    then
-      echo "One pool should have been in backfill_toofull"
-      ERRORS="$(expr $ERRORS + 1)"
-    fi
-
-    if [ "$(ceph pg dump pgs | grep active+clean | wc -l)" != "1" ];
-    then
-      echo "One didn't finish backfill"
-      ERRORS="$(expr $ERRORS + 1)"
-    fi
-
-    ceph pg dump pgs
-
-    if [ $ERRORS != "0" ];
-    then
-      return 1
-    fi
-
-    delete_pool $poolname
-    kill_daemons $dir || return 1
-}
 
 
 # [1] -> [0, 2, 4]
