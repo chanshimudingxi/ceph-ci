@@ -4290,6 +4290,13 @@ void PG::handle_scrub_reserve_release(OpRequestRef op)
   clear_scrub_reserved();
 }
 
+// We can clear the value of this pg primary num_bytes without the lock
+void PG::set_primary_num_bytes(int64_t num_bytes) {
+  assert(num_bytes == 0 || osd->stat_lock.is_locked_by_me());
+  primary_num_bytes = num_bytes;
+  return;
+}
+
 void PG::reject_reservation()
 {
   set_primary_num_bytes(0);
@@ -6625,7 +6632,7 @@ static int64_t pending_backfill_kb(CephContext *cct, int64_t bf_bytes, int64_t l
     return std::max((int64_t)0, (bf_bytes >> 10) - (local_bytes >> 10));
 }
 
-int PG::pg_stat_adjust(osd_stat_t new_stat)
+int PG::pg_stat_adjust(osd_stat_t &new_stat)
 {
   if (is_primary()) {
     return 0;
@@ -7444,13 +7451,17 @@ PG::RecoveryState::RepNotRecovering::react(const RequestBackfillPrio &evt)
     assert(pg->get_primary_num_bytes() == 0);
     pending_adjustment = pending_backfill_kb(pg->cct, evt.primary_num_bytes, pg->info.stats.stats.sum.num_bytes);
   }
+  // This lock protects not only the stats OSDService but also setting the pg primary_num_bytes
+  // That's why we don't immediately unlock
+  Mutex::Locker l(pg->osd->stat_lock);
+  osd_stat_t cur_stat = pg->osd->osd_stat;
   if (pg->cct->_conf->osd_debug_reject_backfill_probability > 0 &&
       (rand()%1000 < (pg->cct->_conf->osd_debug_reject_backfill_probability*1000.0))) {
     ldout(pg->cct, 10) << "backfill reservation rejected: failure injection"
 		       << dendl;
     post_event(RejectRemoteReservation());
   } else if (!pg->cct->_conf->osd_debug_skip_full_check_in_backfill_reservation &&
-      pg->osd->tentative_backfill_full(pg, pending_adjustment)) {
+      pg->osd->tentative_backfill_full(pg, pending_adjustment, cur_stat)) {
     ldout(pg->cct, 10) << "backfill reservation rejected: backfill full"
 		       << dendl;
     post_event(RejectRemoteReservation());

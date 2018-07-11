@@ -744,7 +744,7 @@ bool OSDService::_check_full(DoutPrefixProvider *dpp, s_names type) const
   return cur_state >= type;
 }
 
-bool OSDService::_tentative_full(DoutPrefixProvider *dpp, s_names type, int64_t adjust_used)
+bool OSDService::_tentative_full(DoutPrefixProvider *dpp, s_names type, int64_t adjust_used, osd_stat_t adjusted_stat)
 {
   ldpp_dout(dpp, 20) << __func__ << " type " << get_full_state_name(type) << " adjust_used " << adjust_used << dendl;
   {
@@ -754,8 +754,6 @@ bool OSDService::_tentative_full(DoutPrefixProvider *dpp, s_names type, int64_t 
     }
   }
 
-  Mutex::Locker l(stat_lock);
-  osd_stat_t adjusted_stat = osd_stat;
   ldpp_dout(dpp, 20) << __func__ << " Before kb_used " << adjusted_stat.kb_used << dendl;
   adjusted_stat.kb_used += adjust_used;
   ldpp_dout(dpp, 20) << __func__ << " After kb_used " << adjusted_stat.kb_used << dendl;
@@ -781,9 +779,9 @@ bool OSDService::check_full(DoutPrefixProvider *dpp) const
   return _check_full(dpp, FULL);
 }
 
-bool OSDService::tentative_backfill_full(DoutPrefixProvider *dpp, int64_t adjust_used)
+bool OSDService::tentative_backfill_full(DoutPrefixProvider *dpp, int64_t adjust_used, osd_stat_t stats)
 {
-  return _tentative_full(dpp, BACKFILLFULL, adjust_used);
+  return _tentative_full(dpp, BACKFILLFULL, adjust_used, stats);
 }
 
 bool OSDService::check_backfill_full(DoutPrefixProvider *dpp) const

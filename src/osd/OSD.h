@@ -936,10 +936,10 @@ private:
 public:
   s_names recalc_full_state(float ratio, string &inject);
   void check_full_status(float ratio);
-  bool _tentative_full(DoutPrefixProvider *dpp, s_names type, int64_t adjust_used);
+  bool _tentative_full(DoutPrefixProvider *dpp, s_names type, int64_t adjust_used, osd_stat_t);
   bool check_failsafe_full(DoutPrefixProvider *dpp) const;
   bool check_full(DoutPrefixProvider *dpp) const;
-  bool tentative_backfill_full(DoutPrefixProvider *dpp, int64_t adjust_used);
+  bool tentative_backfill_full(DoutPrefixProvider *dpp, int64_t adjust_used, osd_stat_t);
   bool check_backfill_full(DoutPrefixProvider *dpp) const;
   bool check_nearfull(DoutPrefixProvider *dpp) const;
   bool is_failsafe_full() const;

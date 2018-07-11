@@ -1197,10 +1197,7 @@ public:
     return primary_num_bytes;
   }
 
-  void set_primary_num_bytes(int64_t num_bytes) {
-    primary_num_bytes = num_bytes;
-    return;
-  }
+  void set_primary_num_bytes(int64_t num_bytes);
 
   object_stat_collection_t *get_stats() {
     return &info.stats.stats;
@@ -1849,7 +1846,7 @@ protected:
   };
 
 public:
-  int pg_stat_adjust(osd_stat_t new_stat);
+  int pg_stat_adjust(osd_stat_t &new_stat);
 protected:
 
   struct AdvMap : boost::statechart::event< AdvMap > {
