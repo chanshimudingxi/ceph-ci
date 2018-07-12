@@ -4340,6 +4340,7 @@ int PrimaryLogPG::trim_object(
   
     snapid_t last = coid.snap;
     ctx->delta_stats.num_bytes -= snapset.get_clone_bytes(last);
+    assert(ctx->delta_stats.num_bytes < 2305843009213693952LL);
 
     if (p != snapset.clones.begin()) {
       // not the oldest... merge overlap into next older clone
@@ -4348,14 +4349,18 @@ int PrimaryLogPG::trim_object(
       prev_coid.snap = *n;
       bool adjust_prev_bytes = is_present_clone(prev_coid);
 
-      if (adjust_prev_bytes)
+      if (adjust_prev_bytes) {
 	ctx->delta_stats.num_bytes -= snapset.get_clone_bytes(*n);
+        assert(ctx->delta_stats.num_bytes < 2305843009213693952LL);
+      }
 
       snapset.clone_overlap[*n].intersection_of(
 	snapset.clone_overlap[*p]);
 
-      if (adjust_prev_bytes)
+      if (adjust_prev_bytes) {
 	ctx->delta_stats.num_bytes += snapset.get_clone_bytes(*n);
+        assert(ctx->delta_stats.num_bytes < 2305843009213693952LL);
+      }
     }
     ctx->delta_stats.num_objects--;
     if (coi.is_dirty())
@@ -6803,6 +6808,7 @@ int PrimaryLogPG::do_osd_ops(OpContext *ctx, vector<OSDOp>& ops)
 	    obs.oi.clear_flag(object_info_t::FLAG_OMAP);
 	  }
 	  ctx->delta_stats.num_bytes -= oi.size;
+          assert(ctx->delta_stats.num_bytes < 2305843009213693952LL);
 	  oi.size = 0;
 	  oi.new_object();
 	  oi.user_version = target_version;
@@ -7732,8 +7738,10 @@ inline int PrimaryLogPG::_delete_oid(
   if (soid.is_snap()) {
     assert(ctx->obc->ssc->snapset.clone_overlap.count(soid.snap));
     ctx->delta_stats.num_bytes -= ctx->obc->ssc->snapset.get_clone_bytes(soid.snap);
+    assert(ctx->delta_stats.num_bytes < 2305843009213693952LL);
   } else {
     ctx->delta_stats.num_bytes -= oi.size;
+    assert(ctx->delta_stats.num_bytes < 2305843009213693952LL);
   }
   oi.size = 0;
   oi.new_object();
@@ -7902,7 +7910,9 @@ int PrimaryLogPG::_rollback_to(OpContext *ctx, ceph_osd_op& op)
       // Adjust the cached objectcontext
       maybe_create_new_object(ctx, true);
       ctx->delta_stats.num_bytes -= obs.oi.size;
+      assert(ctx->delta_stats.num_bytes < 2305843009213693952LL);
       ctx->delta_stats.num_bytes += rollback_to->obs.oi.size;
+      assert(ctx->delta_stats.num_bytes < 2305843009213693952LL);
       obs.oi.size = rollback_to->obs.oi.size;
       if (rollback_to->obs.oi.is_data_digest())
 	obs.oi.set_data_digest(rollback_to->obs.oi.data_digest);
@@ -8088,6 +8098,7 @@ void PrimaryLogPG::make_writeable(OpContext *ctx)
     if (is_present_clone(last_clone_oid)) {
       // modified_ranges is still in use by the clone
       ctx->delta_stats.num_bytes += ctx->modified_ranges.size();
+      assert(ctx->delta_stats.num_bytes < 2305843009213693952LL);
     }
     newest_overlap.subtract(ctx->modified_ranges);
   }
@@ -8117,7 +8128,9 @@ void PrimaryLogPG::write_update_size_and_usage(object_stat_sum_t& delta_stats, o
       (offset + length > oi.size && length)) {
     uint64_t new_size = offset + length;
     delta_stats.num_bytes -= oi.size;
+    assert(delta_stats.num_bytes < 2305843009213693952LL);
     delta_stats.num_bytes += new_size;
+    assert(delta_stats.num_bytes < 2305843009213693952LL);
     oi.size = new_size;
   }
  
@@ -8140,7 +8153,9 @@ void PrimaryLogPG::truncate_update_size_and_usage(
 {
   if (oi.size != truncate_size) {
     delta_stats.num_bytes -= oi.size;
+    assert(delta_stats.num_bytes < 2305843009213693952LL);
     delta_stats.num_bytes += truncate_size;
+    assert(delta_stats.num_bytes < 2305843009213693952LL);
     oi.size = truncate_size;
   }
 }
@@ -9419,8 +9434,10 @@ void PrimaryLogPG::finish_copyfrom(CopyFromCallback *cb)
 
   if (cb->get_data_size() != obs.oi.size) {
     ctx->delta_stats.num_bytes -= obs.oi.size;
+    assert(ctx->delta_stats.num_bytes < 2305843009213693952LL);
     obs.oi.size = cb->get_data_size();
     ctx->delta_stats.num_bytes += obs.oi.size;
+    assert(ctx->delta_stats.num_bytes < 2305843009213693952LL);
   }
   ctx->delta_stats.num_wr++;
   ctx->delta_stats.num_wr_kb += shift_round_up(obs.oi.size, 10);
@@ -9601,8 +9618,10 @@ void PrimaryLogPG::finish_promote(int r, CopyResults *results,
       assert(obc->ssc->snapset.clone_overlap.count(soid.snap));
 
       tctx->delta_stats.num_bytes += obc->ssc->snapset.get_clone_bytes(soid.snap);
+      assert(tctx->delta_stats.num_bytes < 2305843009213693952LL);
     } else {
       tctx->delta_stats.num_bytes += results->object_size;
+      assert(tctx->delta_stats.num_bytes < 2305843009213693952LL);
     }
   }
 
@@ -11169,8 +11188,10 @@ void PrimaryLogPG::add_object_context_to_pg_stat(ObjectContextRef obc, pg_stat_t
       obc->ssc = get_snapset_context(oi.soid, false);
     assert(obc->ssc);
     stat.num_bytes += obc->ssc->snapset.get_clone_bytes(oi.soid.snap);
+    assert(stat.num_bytes < 2305843009213693952LL);
   } else {
     stat.num_bytes += oi.size;
+    assert(stat.num_bytes < 2305843009213693952LL);
   }
 
   // add it in
@@ -13642,6 +13663,7 @@ void PrimaryLogPG::hit_set_persist()
   ctx->delta_stats.num_objects_hit_set_archive++;
 
   ctx->delta_stats.num_bytes += bl.length();
+  assert(ctx->delta_stats.num_bytes < 2305843009213693952LL);
   ctx->delta_stats.num_bytes_hit_set_archive += bl.length();
 
   bufferlist bss;
@@ -13707,6 +13729,7 @@ void PrimaryLogPG::hit_set_trim(OpContextUPtr &ctx, unsigned max)
     --ctx->delta_stats.num_objects;
     --ctx->delta_stats.num_objects_hit_set_archive;
     ctx->delta_stats.num_bytes -= obc->obs.oi.size;
+    assert(ctx->delta_stats.num_bytes < 2305843009213693952LL);
     ctx->delta_stats.num_bytes_hit_set_archive -= obc->obs.oi.size;
   }
 }
@@ -14662,6 +14685,7 @@ void PrimaryLogPG::scrub_snapshot_metadata(
       // A clone num_bytes will be added later when we have snapset
       if (!soid.is_snap()) {
         stat.num_bytes += oi->size;
+        assert(stat.num_bytes < 2305843009213693952LL);
       }
       if (soid.nspace == cct->_conf->osd_hit_set_namespace)
 	stat.num_bytes_hit_set_archive += oi->size;
@@ -14838,6 +14862,7 @@ void PrimaryLogPG::scrub_snapshot_metadata(
 	    soid_error.set_size_mismatch();
 	  } else {
             stat.num_bytes += snapset->get_clone_bytes(soid.snap);
+            assert(stat.num_bytes < 2305843009213693952LL);
 	  }
         }
       }

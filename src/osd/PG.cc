@@ -7200,6 +7200,7 @@ PG::RecoveryState::WaitRemoteBackfillReserved::react(const RemoteBackfillReserve
   PG *pg = context< RecoveryMachine >().pg;
 
   ldout(pg->cct, 10) << __func__ << " num_bytes " << pg->info.stats.stats.sum.num_bytes << dendl;
+  assert(pg->info.stats.stats.sum.num_bytes < 2305843009213693952LL);
   if (backfill_osd_it != context< Active >().remote_shards_to_reserve_backfill.end()) {
     //The primary never backfills itself
     assert(*backfill_osd_it != pg->pg_whoami);
