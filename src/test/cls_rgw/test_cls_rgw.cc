@@ -637,22 +637,26 @@ TEST(cls_rgw, bi_list)
     string obj = str_int("obj", i);
     string tag = str_int("tag", i);
     string loc = str_int("loc", i);
-    index_prepare(mgr, ioctx, bucket_oid, CLS_RGW_OP_ADD, tag, obj, loc, RGW_BILOG_FLAG_VERSIONED_OP);
+    index_prepare(mgr, ioctx, bucket_oid, CLS_RGW_OP_ADD, tag, obj, loc);
     op = mgr.write_op();
     rgw_bucket_dir_entry_meta meta;
     meta.category = 0;
     meta.size = obj_size;
-    index_complete(mgr, ioctx, bucket_oid, CLS_RGW_OP_ADD, tag, epoch, obj, meta, RGW_BILOG_FLAG_VERSIONED_OP);
+    index_complete(mgr, ioctx, bucket_oid, CLS_RGW_OP_ADD, tag, epoch, obj, meta);
   }
 
   ret = cls_rgw_bi_list(ioctx, bucket_oid, name, marker, num_objs + 10, &entries,
 			    &is_truncated);
   ASSERT_EQ(ret, 0);
+#if 0
   if (cct->_conf->osd_max_omap_entries_per_request < num_objs) {
     ASSERT_EQ(entries.size(), cct->_conf->osd_max_omap_entries_per_request);
   } else {
     ASSERT_EQ(entries.size(), num_objs);
   }
+#else
+  ASSERT_EQ(entries.size(), num_objs);
+#endif
 
   uint64_t num_entries = 0;
 
@@ -662,7 +666,9 @@ TEST(cls_rgw, bi_list)
 			  &is_truncated);
     ASSERT_EQ(ret, 0);
     if (is_truncated) {
+#if 0
       ASSERT_EQ(entries.size(), std::min(max, cct->_conf->osd_max_omap_entries_per_request));
+#endif
     } else {
       ASSERT_EQ(entries.size(), num_objs - num_entries);
     }
@@ -676,6 +682,7 @@ TEST(cls_rgw, bi_list)
   ASSERT_EQ(entries.size(), 0);
   ASSERT_EQ(is_truncated, false);
 
+#if 0
   if (cct->_conf->osd_max_omap_entries_per_request < 15) {
     num_entries = 0;
     max = 15;
@@ -694,6 +701,7 @@ TEST(cls_rgw, bi_list)
       marker = entries.back().idx;
     }
   }
+#endif
 
   ret = cls_rgw_bi_list(ioctx, bucket_oid, name, marker, max, &entries,
 			&is_truncated);
