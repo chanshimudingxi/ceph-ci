@@ -397,8 +397,8 @@ def safe_kill(pid):
 
 
 class LocalFuseMount(FuseMount):
-    def __init__(self, test_dir, client_id):
-        super(LocalFuseMount, self).__init__(None, test_dir, client_id, LocalRemote())
+    def __init__(self, ctx, test_dir, client_id):
+        super(LocalFuseMount, self).__init__(None, ctx, test_dir, client_id, LocalRemote())
 
     @property
     def config_path(self):
@@ -905,6 +905,11 @@ def exec_test():
     test_dir = tempfile.mkdtemp()
     teuth_config['test_path'] = test_dir
 
+    ctx = LocalContext()
+    ceph_cluster = LocalCephCluster(ctx)
+    mds_cluster = LocalMDSCluster(ctx)
+    mgr_cluster = LocalMgrCluster(ctx)
+
     # Construct Mount classes
     mounts = []
     for client_id in clients:
@@ -920,7 +925,7 @@ def exec_test():
 
             open("./keyring", "a").write(p.stdout.getvalue())
 
-        mount = LocalFuseMount(test_dir, client_id)
+        mount = LocalFuseMount(ctx, test_dir, client_id)
         mounts.append(mount)
         if mount.is_mounted():
             log.warn("unmounting {0}".format(mount.mountpoint))
@@ -928,11 +933,6 @@ def exec_test():
         else:
             if os.path.exists(mount.mountpoint):
                 os.rmdir(mount.mountpoint)
-
-    ctx = LocalContext()
-    ceph_cluster = LocalCephCluster(ctx)
-    mds_cluster = LocalMDSCluster(ctx)
-    mgr_cluster = LocalMgrCluster(ctx)
 
     from tasks.cephfs_test_runner import DecoratingLoader
 
