@@ -1361,6 +1361,8 @@ public:
     //pool options
     pool_opts_t pool_opts;
 
+    class ContextQueue *commit_queue;
+
     OnodeRef get_onode(const ghobject_t& oid, bool create);
 
     // the terminology is confusing here, sorry!
@@ -1683,8 +1685,6 @@ public:
     BlueStore *store;
     coll_t cid;
 
-    size_t shard;
-
     uint64_t last_seq = 0;
 
     std::atomic_int txc_with_unstable_io = {0};  ///< num txcs with unstable io
@@ -1852,10 +1852,7 @@ private:
   deferred_osr_queue_t deferred_queue; ///< osr's with deferred io pending
   int deferred_queue_size = 0;         ///< num txc's queued across all osrs
   atomic_int deferred_aggressive = {0}; ///< aggressive wakeup of kv thread
-  Finisher deferred_finisher;
-
-  int m_finisher_num = 1;
-  vector<Finisher*> finishers;
+  Finisher deferred_finisher, finisher;
 
   KVSyncThread kv_sync_thread;
   std::mutex kv_lock;
@@ -2366,6 +2363,7 @@ public:
 
   CollectionHandle open_collection(const coll_t &c) override;
   CollectionHandle create_new_collection(const coll_t& cid) override;
+  void set_collection_commit_queue(const coll_t& cid, class ContextQueue *commit_queue) override;
 
   bool collection_exists(const coll_t& c) override;
   int collection_empty(CollectionHandle& c, bool *empty) override;
