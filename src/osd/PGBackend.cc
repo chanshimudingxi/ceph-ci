@@ -617,7 +617,7 @@ int PGBackend::be_scan_list(
   return 0;
 }
 
-bool PGBackend::be_compare_scrub_objects(
+void PGBackend::be_compare_scrub_objects(
   pg_shard_t auth_shard,
   const ScrubMap::object &auth,
   const object_info_t& auth_oi,
@@ -683,7 +683,7 @@ bool PGBackend::be_compare_scrub_objects(
     }
   }
   if (candidate.stat_error)
-    return error == FOUND_ERROR;
+    return;
   uint64_t oi_size = be_get_ondisk_size(auth_oi.size);
   if (oi_size != candidate.size) {
     if (error != CLEAN)
@@ -737,7 +737,7 @@ bool PGBackend::be_compare_scrub_objects(
       obj_result.set_attr_name_mismatch();
     }
   }
-  return error == FOUND_ERROR;
+  return;
 }
 
 static int dcount(const object_info_t &oi)
@@ -982,13 +982,14 @@ void PGBackend::be_compare_scrubmaps(
 	shard_map[j->first].set_object(j->second->objects[*k]);
 	// Compare
 	stringstream ss;
-	bool found = be_compare_scrub_objects(auth->first,
+	be_compare_scrub_objects(auth->first,
 				   auth_object,
 				   auth_oi,
 				   j->second->objects[*k],
 				   shard_map[j->first],
 				   object_error,
 				   ss);
+
 	// Some errors might have already been set in be_select_auth_object()
 	if (shard_map[j->first].errors != 0) {
 	  cur_inconsistent.insert(j->first);
@@ -996,16 +997,17 @@ void PGBackend::be_compare_scrubmaps(
 	    ++deep_errors;
 	  else
 	    ++shallow_errors;
-	  // Only true if be_compare_scrub_objects() found errors and put something
-	  // in ss.
-	  if (found)
+	  if (!ss.str().empty()) {
 	    errorstream << pgid << " shard " << j->first << ": soid " << *k
 		      << " " << ss.str() << "\n";
-	} else if (found) {
+	  }
+	} else if (object_error.errors != 0) {
 	  // Track possible shard to use as authoritative, if needed
 	  // There are errors, without identifying the shard
 	  object_errors.insert(j->first);
-	  errorstream << pgid << " : soid " << *k << " " << ss.str() << "\n";
+	  if (!ss.str().empty()) {
+	    errorstream << pgid << " : soid " << *k << " " << ss.str() << "\n";
+	  }
 	} else {
 	  // XXX: The auth shard might get here that we don't know
 	  // that it has the "correct" data.
