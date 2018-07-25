@@ -26,7 +26,7 @@ trap cleanup INT TERM EXIT
 
 echo PREFILL IMAGE
 
-rbd bench ${IMAGE} --io-type write --io-size 4M --io-total ${SIZE}
+#rbd bench ${IMAGE} --io-type write --io-size 4M --io-total ${SIZE}
 rbd bench ${IMAGE} --io-type write --io-size 4K --io-pattern rand --io-total 20M
 rbd bench ${IMAGE} --io-type write --io-size 64K --io-pattern rand --io-total 80M
 rbd info ${IMAGE} | grep 'features: .*exclusive-lock' ||
@@ -44,12 +44,12 @@ for n in `seq $N`; do
                 echo rbd_journal_object_flush_interval: $i;
                 for a in $FLUSH_AGES; do
                     echo rbd_journal_object_flush_age: $a;
-                    rbd bench ${IMAGE} --rbd-cache=false \
+                    rbd bench ${IMAGE} --debug-journaler=30 --rbd-cache=false \
                         --rbd_journal_object_max_in_flight_appends $m \
                         --rbd_journal_object_flush_interval $i \
                         --rbd_journal_object_flush_age $a \
                         --io-type write --io-size ${io_size} --io-total ${io_total} \
-                        --io-pattern rand
+                        --io-pattern rand 2>/dev/null
                 done
             done
         done
