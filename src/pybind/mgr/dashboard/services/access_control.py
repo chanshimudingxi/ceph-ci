@@ -662,6 +662,9 @@ class LocalAuthenticator(object):
     def __init__(self):
         load_access_control_db()
 
+    def get_user(self, username):
+        ACCESS_CTRL_DB.get_user(username)
+
     def authenticate(self, username, password):
         try:
             user = ACCESS_CTRL_DB.get_user(username)
