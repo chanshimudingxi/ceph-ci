@@ -1,7 +1,7 @@
 #!/usr/bin/env bash
 
 set -e
-
+: ${CEPH_ROOT:=$PWD/../../../../}
 cd $CEPH_ROOT/src/pybind/mgr/dashboard/frontend
 
 config='src/unit-test-configuration.ts'

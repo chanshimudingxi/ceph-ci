@@ -1,13 +1,101 @@
 # -*- coding: utf-8 -*-
 from __future__ import absolute_import
 
+from base64 import b64encode
+from datetime import datetime, timedelta
+import json
+import os
+import threading
 import time
+import uuid
 
 import cherrypy
+import jwt
 
-from .access_control import LocalAuthenticator
+from .access_control import LocalAuthenticator, UserDoesNotExist
 from .. import mgr, logger
-from ..tools import Session
+
+
+class JwtManager(object):
+    JWT_TOKEN_BLACKLIST_KEY = "jwt-token-black-list"
+    JWT_TOKEN_TTL = 28800  # default 8 hours
+    JWT_ALGORITHM = 'HS256'
+    _secret = None
+
+    LOCAL_USER = threading.local()
+
+    @staticmethod
+    def _gen_secret():
+        secret = os.urandom(16)
+        return b64encode(secret).decode('utf-8')
+
+    @classmethod
+    def init(cls):
+        # generate a new secret if it does not exist
+        secret = mgr.get_store('jwt_secret', None)
+        if secret is None:
+            secret = cls._gen_secret()
+            mgr.set_store('jwt_secret', secret)
+        cls._secret = secret
+
+    @classmethod
+    def gen_token(cls, username):
+        ttl = mgr.get_config('jwt-token-ttl', cls.JWT_TOKEN_TTL)
+        ttl = int(ttl)
+        payload = {
+            'iss': 'ceph-dashboard',
+            'jti': str(uuid.uuid4()),
+            'exp': datetime.utcnow() + timedelta(seconds=ttl),
+            'username': username
+        }
+        return jwt.encode(payload, cls._secret, algorithm=cls.JWT_ALGORITHM)
+
+    @classmethod
+    def decode_token(cls, token):
+        return jwt.decode(token, cls._secret, algorithms=cls.JWT_ALGORITHM)
+
+    @classmethod
+    def get_token_from_header(cls):
+        auth_header = cherrypy.request.headers.get('authorization')
+        if auth_header is not None:
+            scheme, params = auth_header.split(' ', 1)
+            if scheme.lower() == 'bearer':
+                return params
+        return None
+
+    @classmethod
+    def set_user(cls, token):
+        cls.LOCAL_USER.username = token['username']
+
+    @classmethod
+    def reset_user(cls):
+        cls.set_user({'username': None, 'permissions': None})
+
+    @classmethod
+    def get_username(cls):
+        return getattr(cls.LOCAL_USER, 'username', None)
+
+    @classmethod
+    def blacklist_token(cls, token):
+        token = jwt.decode(token, verify=False)
+        bl_dict = json.loads(mgr.get_store(cls.JWT_TOKEN_BLACKLIST_KEY, "{}"))
+        now = time.time()
+
+        # remove expired tokens
+        to_delete = []
+        for jti, exp in bl_dict.items():
+            if exp < now:
+                to_delete.append(jti)
+        for jti in to_delete:
+            del bl_dict[jti]
+
+        bl_dict[token['jti']] = token['exp']
+        mgr.set_store(cls.JWT_TOKEN_BLACKLIST_KEY, json.dumps(bl_dict))
+
+    @classmethod
+    def is_blacklisted(cls, jti):
+        bl_dict = json.loads(mgr.get_store(cls.JWT_TOKEN_BLACKLIST_KEY, "{}"))
+        return jti in bl_dict
 
 
 class AuthManager(object):
@@ -16,6 +104,10 @@ class AuthManager(object):
     @classmethod
     def initialize(cls):
         cls.AUTH_PROVIDER = LocalAuthenticator()
+
+    @classmethod
+    def get_user(cls, username):
+        cls.AUTH_PROVIDER.get_user(username)
 
     @classmethod
     def authenticate(cls, username, password):
@@ -32,34 +124,38 @@ class AuthManagerTool(cherrypy.Tool):
             'before_handler', self._check_authentication, priority=20)
 
     def _check_authentication(self):
-        username = cherrypy.session.get(Session.USERNAME)
-        if not username:
-            logger.debug('Unauthorized access to %s',
-                         cherrypy.url(relative='server'))
-            raise cherrypy.HTTPError(401, 'You are not authorized to access '
-                                          'that resource')
-        now = time.time()
-        expires = float(mgr.get_config(
-            'session-expire', Session.DEFAULT_EXPIRE))
-        if expires > 0:
-            username_ts = cherrypy.session.get(Session.TS, None)
-            if username_ts and float(username_ts) < (now - expires):
-                cherrypy.session[Session.USERNAME] = None
-                cherrypy.session[Session.TS] = None
-                logger.debug('Session expired')
-                raise cherrypy.HTTPError(401,
-                                         'Session expired. You are not '
-                                         'authorized to access that resource')
-        cherrypy.session[Session.TS] = now
+        JwtManager.reset_user()
+        token = JwtManager.get_token_from_header()
+        if token:
+            try:
+                token = JwtManager.decode_token(token)
+                if not JwtManager.is_blacklisted(token['jti']):
+                    AuthManager.get_user(token['username'])
+                    self._check_authorization(token)
+                    return
+                logger.debug('Token is black-listed')
+            except jwt.exceptions.ExpiredSignatureError:
+                logger.debug("Token has expired")
+            except jwt.exceptions.InvalidTokenError:
+                logger.debug("Failed to decode token")
+            except UserDoesNotExist:
+                logger.debug("Invalid token: user %s does not exist",
+                             token['username'])
 
-        self._check_authorization(username)
+        logger.debug('Unauthorized access to %s',
+                     cherrypy.url(relative='server'))
+        raise cherrypy.HTTPError(401, 'You are not authorized to access '
+                                      'that resource')
 
-    def _check_authorization(self, username):
+    def _check_authorization(self, token):
         logger.debug("AMT: checking authorization...")
+        username = token['username']
         handler = cherrypy.request.handler.callable
         controller = handler.__self__
         sec_scope = getattr(controller, '_security_scope', None)
         sec_perms = getattr(handler, '_security_permissions', None)
+        JwtManager.set_user(token)
+
         logger.debug("AMT: checking %s access to '%s' scope", sec_perms,
                      sec_scope)
 
