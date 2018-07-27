@@ -3873,6 +3873,12 @@ void OSD::load_pgs()
       continue;
     }
 
+    {
+      uint32_t shard_index = pgid.hash_to_shard(shards.size());
+      assert(NULL != shards[shard_index]);
+      store->set_collection_commit_queue(pg->coll, &(shards[shard_index]->context_queue));
+    }
+
     set<spg_t> new_children;
     service.identify_split_children(pg->get_osdmap(), osdmap, pg->pg_id,
 				    &new_children);
@@ -3931,6 +3937,12 @@ PGRef OSD::handle_pg_create_info(const OSDMapRef& osdmap,
 
   PGRef pg = _make_pg(startmap, pgid);
   pg->ch = store->create_new_collection(pg->coll);
+
+  {
+    uint32_t shard_index = pgid.hash_to_shard(shards.size());
+    assert(NULL != shards[shard_index]);
+    store->set_collection_commit_queue(pg->coll, &(shards[shard_index]->context_queue));
+  }
 
   pg->lock(true);
 
@@ -9649,7 +9661,7 @@ void OSD::ShardedOpWQ::_process(uint32_t thread_index, heartbeat_handle_d *hb)
   assert(sdata);
   // peek at spg_t
   sdata->shard_lock.Lock();
-  if (sdata->pqueue->empty()) {
+  if (sdata->pqueue->empty() && sdata->context_queue.empty()) {
     sdata->sdata_wait_lock.Lock();
     if (!sdata->stop_waiting) {
       dout(20) << __func__ << " empty q, waiting" << dendl;
@@ -9658,7 +9670,7 @@ void OSD::ShardedOpWQ::_process(uint32_t thread_index, heartbeat_handle_d *hb)
       sdata->sdata_cond.Wait(sdata->sdata_wait_lock);
       sdata->sdata_wait_lock.Unlock();
       sdata->shard_lock.Lock();
-      if (sdata->pqueue->empty()) {
+      if (sdata->pqueue->empty() && sdata->context_queue.empty()) {
 	sdata->shard_lock.Unlock();
 	return;
       }
@@ -9671,11 +9683,24 @@ void OSD::ShardedOpWQ::_process(uint32_t thread_index, heartbeat_handle_d *hb)
       return;
     }
   }
-  OpQueueItem item = sdata->pqueue->dequeue();
+
   if (osd->is_stopping()) {
     sdata->shard_lock.Unlock();
     return;    // OSD shutdown, discard.
   }
+
+  list<Context *> oncommits;
+  if (!sdata->context_queue.empty()) {
+    sdata->context_queue.swap(oncommits);
+  }
+
+  if (sdata->pqueue->empty()) {
+    sdata->shard_lock.Unlock();
+    handle_oncommits(oncommits);
+    return;
+  }
+
+  OpQueueItem item = sdata->pqueue->dequeue();
   const auto token = item.get_ordering_token();
   auto r = sdata->pg_slots.emplace(token, nullptr);
   if (r.second) {
@@ -9713,6 +9738,7 @@ void OSD::ShardedOpWQ::_process(uint32_t thread_index, heartbeat_handle_d *hb)
       dout(20) << __func__ << " slot " << token << " no longer there" << dendl;
       pg->unlock();
       sdata->shard_lock.Unlock();
+      handle_oncommits(oncommits);
       return;
     }
     slot = q->second.get();
@@ -9724,6 +9750,7 @@ void OSD::ShardedOpWQ::_process(uint32_t thread_index, heartbeat_handle_d *hb)
 	       << " nothing queued" << dendl;
       pg->unlock();
       sdata->shard_lock.Unlock();
+      handle_oncommits(oncommits);
       return;
     }
     if (requeue_seq != slot->requeue_seq) {
@@ -9733,6 +9760,7 @@ void OSD::ShardedOpWQ::_process(uint32_t thread_index, heartbeat_handle_d *hb)
 	       << dendl;
       pg->unlock();
       sdata->shard_lock.Unlock();
+      handle_oncommits(oncommits);
       return;
     }
     if (slot->pg != pg) {
@@ -9832,10 +9860,12 @@ void OSD::ShardedOpWQ::_process(uint32_t thread_index, heartbeat_handle_d *hb)
       if (pushes_to_free > 0) {
 	sdata->shard_lock.Unlock();
 	osd->service.release_reserved_pushes(pushes_to_free);
+	handle_oncommits(oncommits);
 	return;
       }
     }
     sdata->shard_lock.Unlock();
+    handle_oncommits(oncommits);
     return;
   }
   if (qi.is_peering()) {
@@ -9844,6 +9874,7 @@ void OSD::ShardedOpWQ::_process(uint32_t thread_index, heartbeat_handle_d *hb)
       _add_slot_waiter(token, slot, std::move(qi));
       sdata->shard_lock.Unlock();
       pg->unlock();
+      handle_oncommits(oncommits);
       return;
     }
   }
@@ -9890,6 +9921,8 @@ void OSD::ShardedOpWQ::_process(uint32_t thread_index, heartbeat_handle_d *hb)
     tracepoint(osd, opwq_process_finish, reqid.name._type,
         reqid.name._num, reqid.tid, reqid.inc);
   }
+
+  handle_oncommits(oncommits);
 }
 
 void OSD::ShardedOpWQ::_enqueue(OpQueueItem&& item) {
