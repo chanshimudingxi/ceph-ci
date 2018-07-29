@@ -522,15 +522,9 @@ add_executable(ceph_test_admin_socket_output
   admin_socket_output.cc
   admin_socket_output_tests.cc
   )
+find_package(StdFilesystem REQUIRED)
 target_link_libraries(ceph_test_admin_socket_output
-  ceph-common)
-if(CXX_STDLIB STREQUAL "libstdc++")
-  target_link_libraries(ceph_test_admin_socket_output
-    -lstdc++fs)
-elseif(CXX_STDLIB STREQUAL "libc++")
-  target_link_libraries(ceph_test_admin_socket_output
-    -lc++experimental)
-endif()
+  ceph-common StdFilesystem::filesystem)
 install(TARGETS
   ceph_test_admin_socket_output
   DESTINATION ${CMAKE_INSTALL_BINDIR})
