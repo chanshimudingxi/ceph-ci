@@ -7752,6 +7752,7 @@ void OSD::_finish_splits(set<PGRef>& pgs)
 {
   dout(10) << __func__ << " " << pgs << dendl;
   Mutex::Locker l(osd_lock);
+  dout(10) << __func__ << " got osd_lock" << dendl;
   if (is_stopping())
     return;
   PG::RecoveryCtx rctx = create_context();
@@ -7760,16 +7761,20 @@ void OSD::_finish_splits(set<PGRef>& pgs)
        ++i) {
     PG *pg = i->get();
 
+    dout(10) << __func__ << " " << *pg << " try lock" << dendl;
     pg->lock();
     dout(10) << __func__ << " " << *pg << dendl;
     epoch_t e = pg->get_osdmap_epoch();
     pg->handle_initialize(&rctx);
     pg->queue_null(e, e);
+    dout(10) << __func__ << " queue_null completed" << dendl;
     dispatch_context_transaction(rctx, pg);
     pg->unlock();
 
     unsigned shard_index = pg->pg_id.hash_to_shard(num_shards);
+    dout(10) << __func__ << " start register_and_wake_split" << dendl;
     shards[shard_index]->register_and_wake_split_child(pg);
+    dout(10) << __func__ << " end register_and_wake_split" << dendl;
   }
 
   dispatch_context(rctx, 0, service.get_osdmap());
@@ -9696,6 +9701,7 @@ void OSD::ShardedOpWQ::_process(uint32_t thread_index, heartbeat_handle_d *hb)
 
   if (sdata->pqueue->empty()) {
     sdata->shard_lock.Unlock();
+    dout(20) << __func__ << " "  << __LINE__ << dendl;
     handle_oncommits(oncommits);
     return;
   }
@@ -9738,6 +9744,7 @@ void OSD::ShardedOpWQ::_process(uint32_t thread_index, heartbeat_handle_d *hb)
       dout(20) << __func__ << " slot " << token << " no longer there" << dendl;
       pg->unlock();
       sdata->shard_lock.Unlock();
+    dout(20) << __func__ << " "  << __LINE__ << dendl;
       handle_oncommits(oncommits);
       return;
     }
@@ -9750,6 +9757,7 @@ void OSD::ShardedOpWQ::_process(uint32_t thread_index, heartbeat_handle_d *hb)
 	       << " nothing queued" << dendl;
       pg->unlock();
       sdata->shard_lock.Unlock();
+    dout(20) << __func__ << " "  << __LINE__ << dendl;
       handle_oncommits(oncommits);
       return;
     }
@@ -9760,6 +9768,7 @@ void OSD::ShardedOpWQ::_process(uint32_t thread_index, heartbeat_handle_d *hb)
 	       << dendl;
       pg->unlock();
       sdata->shard_lock.Unlock();
+    dout(20) << __func__ << " "  << __LINE__ << dendl;
       handle_oncommits(oncommits);
       return;
     }
@@ -9922,6 +9931,7 @@ void OSD::ShardedOpWQ::_process(uint32_t thread_index, heartbeat_handle_d *hb)
         reqid.name._num, reqid.tid, reqid.inc);
   }
 
+  dout(20) << __func__ << " "  << __LINE__ << dendl;
   handle_oncommits(oncommits);
 }
 
