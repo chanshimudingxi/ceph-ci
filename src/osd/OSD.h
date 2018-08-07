@@ -677,7 +677,6 @@ public:
   void promote_throttle_recalibrate();
 
   // -- Objecter, for tiering reads/writes from/to other OSDs --
-  ceph::io_context_pool poolctx;
   Objecter *objecter;
   int m_objecter_finishers;
   vector<Finisher*> objecter_finishers;
@@ -1017,7 +1016,7 @@ public:
   void dump_live_pgids();
 #endif
 
-  explicit OSDService(OSD *osd);
+  OSDService(OSD *osd, boost::asio::io_context& ioctx);
   ~OSDService();
 };
 
@@ -2184,7 +2183,8 @@ private:
       Messenger *hb_front_server,
       Messenger *hb_back_server,
       Messenger *osdc_messenger,
-      MonClient *mc, const std::string &dev, const std::string &jdev);
+      MonClient *mc, const std::string &dev, const std::string &jdev,
+      boost::asio::io_context& ictx);
   ~OSD() override;
 
   // static bits

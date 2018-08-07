@@ -20,6 +20,7 @@
 #include <iostream>
 #include <string>
 
+#include "common/asio_misc.h"
 #include "include/ceph_features.h"
 #include "include/compat.h"
 #include "include/random.h"
@@ -198,7 +199,8 @@ int main(int argc, const char **argv)
   register_async_signal_handler(SIGHUP, sighup_handler);
   
   // get monmap
-  MonClient mc(g_ceph_context);
+  ceph::io_context_pool ctxpool(g_ceph_context);
+  MonClient mc(g_ceph_context, ctxpool);
   if (mc.build_initial_monmap() < 0)
     forker.exit(1);
   global_init_chdir(g_ceph_context);
@@ -206,7 +208,7 @@ int main(int argc, const char **argv)
   msgr->start();
 
   // start mds
-  mds = new MDSDaemon(g_conf()->name.get_id().c_str(), msgr, &mc);
+  mds = new MDSDaemon(g_conf()->name.get_id().c_str(), msgr, &mc, ctxpool);
 
   // in case we have to respawn...
   mds->orig_argc = argc;

@@ -55,13 +55,12 @@ MDSRank::MDSRank(
     Messenger *msgr,
     MonClient *monc_,
     Context *respawn_hook_,
-    Context *suicide_hook_)
-  :
+    Context *suicide_hook_,
+    boost::asio::io_context& ioctx) :
     whoami(whoami_), incarnation(0),
     mds_lock(mds_lock_), cct(msgr->cct), clog(clog_), timer(timer_),
     mdsmap(mdsmap_),
-    ctxpool(g_ceph_context, ceph::construct_suspended),
-    objecter(new Objecter(g_ceph_context, msgr, monc_, ctxpool, 0, 0)),
+    objecter(new Objecter(g_ceph_context, msgr, monc_, ioctx, 0, 0)),
     server(NULL), mdcache(NULL), locker(NULL), mdlog(NULL),
     balancer(NULL), scrubstack(NULL),
     damage_table(whoami_),
@@ -167,7 +166,6 @@ MDSRank::~MDSRank()
 
 void MDSRankDispatcher::init()
 {
-  ctxpool.start();
   objecter->init();
   messenger->add_dispatcher_head(objecter);
 
@@ -414,7 +412,6 @@ void MDSRankDispatcher::shutdown()
     objecter->shutdown();
 
   monc->shutdown();
-  ctxpool.finish();
 
   op_tracker.on_shutdown();
 
@@ -3036,9 +3033,10 @@ MDSRankDispatcher::MDSRankDispatcher(
     Messenger *msgr,
     MonClient *monc_,
     Context *respawn_hook_,
-    Context *suicide_hook_)
+    Context *suicide_hook_,
+    boost::asio::io_context& ictx)
   : MDSRank(whoami_, mds_lock_, clog_, timer_, beacon_, mdsmap_,
-      msgr, monc_, respawn_hook_, suicide_hook_)
+	    msgr, monc_, respawn_hook_, suicide_hook_, ictx)
 {}
 
 bool MDSRankDispatcher::handle_command(

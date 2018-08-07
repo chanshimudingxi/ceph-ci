@@ -165,7 +165,6 @@ class MDSRank {
 
     MDSMap *&mdsmap;
 
-    ceph::io_context_pool ctxpool;
     Objecter     *objecter;
 
     // sub systems
@@ -320,7 +319,8 @@ class MDSRank {
         Messenger *msgr,
         MonClient *monc_,
         Context *respawn_hook_,
-        Context *suicide_hook_);
+        Context *suicide_hook_,
+	boost::asio::io_context& ictx);
 
   protected:
     ~MDSRank();
@@ -605,7 +605,8 @@ public:
       Messenger *msgr,
       MonClient *monc_,
       Context *respawn_hook_,
-      Context *suicide_hook_);
+      Context *suicide_hook_,
+      boost::asio::io_context& ictx);
 };
 
 // This utility for MDS and MDSRank dispatchers.

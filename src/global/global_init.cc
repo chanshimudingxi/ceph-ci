@@ -12,6 +12,7 @@
  *
  */
 
+#include "common/asio_misc.h"
 #include "common/ceph_argparse.h"
 #include "common/code_environment.h"
 #include "common/config.h"
@@ -145,7 +146,8 @@ void global_pre_init(
     // make sure our mini-session gets legacy values
     conf.apply_changes(nullptr);
 
-    MonClient mc_bootstrap(g_ceph_context);
+    ceph::io_context_pool cp(g_ceph_context, 1);
+    MonClient mc_bootstrap(g_ceph_context, cp);
     if (mc_bootstrap.get_monmap_and_config() < 0) {
       cct->_log->flush();
       cerr << "failed to fetch mon config (--no-mon-config to skip)"
@@ -153,7 +155,6 @@ void global_pre_init(
       _exit(1);
     }
   }
-
   // do the --show-config[-val], if present in argv
   conf.do_argv_commands();
 

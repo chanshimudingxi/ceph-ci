@@ -1272,10 +1272,10 @@ public:
  * Specialization of Client that manages its own Objecter instance
  * and handles init/shutdown of messenger/monclient
  */
-class StandaloneClient : private ceph::io_context_pool, public Client
+class StandaloneClient : public Client
 {
   public:
-  StandaloneClient(Messenger *m, MonClient *mc);
+  StandaloneClient(Messenger *m, MonClient *mc, boost::asio::io_context& ictx);
 
   ~StandaloneClient() override;
 

@@ -49,6 +49,7 @@ class RadosClient : public Dispatcher
 public:
   using Dispatcher::cct;
   const ConfigProxy& conf;
+  ceph::io_context_pool poolctx;
 private:
   enum {
     DISCONNECTED,
@@ -90,7 +91,6 @@ private:
   int wait_for_osdmap();
 
 public:
-  ceph::io_context_pool poolctx;
 
   explicit RadosClient(CephContext *cct_);
   ~RadosClient() override;
