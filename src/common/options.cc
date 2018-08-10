@@ -4941,6 +4941,10 @@ std::vector<Option> get_rgw_options() {
     .set_default(100)
     .set_description("Max number of ACL grants in a single request"),
 
+    Option("rgw_cors_rules_max_num", Option::TYPE_INT, Option::LEVEL_ADVANCED)
+    .set_default(100)
+    .set_description("Max number of cors rules in a single request"),
+
     Option("rgw_rados_tracing", Option::TYPE_BOOL, Option::LEVEL_ADVANCED)
     .set_default(false)
     .set_description("true if LTTng-UST tracepoints should be enabled"),
@@ -5031,7 +5035,7 @@ std::vector<Option> get_rgw_options() {
 
     Option("rgw_enable_lc_threads", Option::TYPE_BOOL, Option::LEVEL_ADVANCED)
     .set_default(true)
-    .set_description("Enables the lifecycle maintenance thread. This is required on at least on rgw for each zone.")
+    .set_description("Enables the lifecycle maintenance thread. This is required on at least one rgw for each zone.")
     .set_long_description(
         "The lifecycle maintenance thread is responsible for lifecycle related maintenance "
         "work. The thread itself can be disabled, but in order for lifecycle to work "
@@ -5097,6 +5101,13 @@ std::vector<Option> get_rgw_options() {
     .set_long_description(
         "This is needed for virtual hosting of buckets, unless configured via zonegroup "
         "configuration."),
+
+    Option("rgw_service_provider_name", Option::TYPE_STR, Option::LEVEL_ADVANCED)
+    .set_default("")
+    .set_description("Service provider name which is contained in http response headers")
+    .set_long_description(
+        "As S3 or other cloud storage providers do, http response headers should contain the name of the provider. "
+        "This name will be placed in http header 'Server'."),
 
     Option("rgw_content_length_compat", Option::TYPE_BOOL, Option::LEVEL_ADVANCED)
     .set_default(false)
