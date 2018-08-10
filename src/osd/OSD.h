@@ -1747,8 +1747,12 @@ protected:
       uint32_t shard_index = thread_index % osd->num_shards;
       auto &&sdata = osd->shards[shard_index];
       assert(sdata);
+      bool is_smallest_thread_index = thread_index < osd->num_shards;
       Mutex::Locker l(sdata->shard_lock);
-      return sdata->pqueue->empty() && sdata->context_queue.empty();
+      if (is_smallest_thread_index)
+	return sdata->pqueue->empty() && sdata->context_queue.empty();
+      else
+	return sdata->pqueue->empty();
     }
 
     void handle_oncommits(list<Context*>& oncommits) {
