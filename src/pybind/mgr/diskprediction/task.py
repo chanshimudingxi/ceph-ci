@@ -40,8 +40,6 @@ class AgentRunner(Thread):
         self.event = Event()
         self.task_interval = \
             int(self._module_inst.get_configuration(self.interval_key))
-        self.cluster_domain_id = \
-            self._module_inst.get_configuration('diskprediction_cluster_domain_id')
 
     def terminate(self):
         self.exit = True
@@ -74,7 +72,7 @@ class AgentRunner(Thread):
                     password=self._module_inst.get_configuration(
                         'diskprediction_password'),
                     port=self._module_inst.get_configuration('diskprediction_port'),
-                    cert_path=self._module_inst.get_configuration('diskprediction_cert_path'),
+                    cert_context=self._module_inst.get_configuration('diskprediction_cert_context'),
                     mgr_inst=self._module_inst)
                 self._obj_sender = GRPcClient(conf)
             else:
@@ -86,9 +84,9 @@ class AgentRunner(Thread):
                 self._module_inst.status = DP_MGR_STAT_FAILED
                 return
             if self._obj_sender.test_connection():
+                self._module_inst.status = DP_MGR_STAT_OK
                 self._log.debug('succeed to test connection')
                 self._run()
-                self._module_inst.status = DP_MGR_STAT_OK
             else:
                 self._log.error('failed to test connection')
                 self._module_inst.status = DP_MGR_STAT_FAILED

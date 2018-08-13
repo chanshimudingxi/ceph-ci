@@ -6292,7 +6292,7 @@ int OSD::probe_smart_device(const char *device, int timeout, std::string *result
 {
   // when using --json, smartctl will report its errors in JSON format to stdout 
   SubProcessTimed smartctl(
-    "sudo", SubProcess::CLOSE, SubProcess::PIPE, SubProcess::CLOSE,
+    "sudo", SubProcess::CLOSE, SubProcess::PIPE, SubProcess::PIPE,
     timeout);
   smartctl.add_cmd_args(
     "smartctl",

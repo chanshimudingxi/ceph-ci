@@ -64,7 +64,7 @@ class SAIAgent(MetricsAgent):
                 c_data.fields['is_ceph_error'] = bool(True)
                 c_data.fields['needs_warning'] = bool(True)
                 c_data.fields['is_error'] = bool(True)
-                c_data.fields['problems'] = obj_api.get_health_checks()
+                c_data.fields['problems'] = str(obj_api.get_health_checks())
             else:
                 c_data.fields['is_ceph_error'] = bool(False)
             c_data.fields['send'] = int(time.time() * 1000)

@@ -1,6 +1,7 @@
 from __future__ import absolute_import
 
 from .. import BaseAgent
+from ...common import DP_MGR_STAT_FAILED, DP_MGR_STAT_WARNING, DP_MGR_STAT_OK
 
 AGENT_VERSION = '1.0.0'
 
@@ -47,11 +48,11 @@ class MetricsAgent(BaseAgent):
             total_count = status_info['success_count'] + status_info['failure_count']
             if total_count:
                 if status_info['success_count'] == 0:
-                    result['last_result'] = 'Error'
+                    self._module_inst.status = DP_MGR_STAT_FAILED
                 elif status_info['failure_count'] == 0:
-                    result['last_result'] = 'OK'
+                    self._module_inst.status = DP_MGR_STAT_OK
                 else:
-                    result['last_result'] = 'Warning'
+                    self._module_inst.status = DP_MGR_STAT_WARNING
             return result
-        result['last_result'] = 'Not_Ready'
+            self._module_inst.status = DP_MGR_STAT_FAILED
         return result

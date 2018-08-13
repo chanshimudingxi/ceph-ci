@@ -105,9 +105,9 @@ class AccountStub(object):
         request_serializer=mainServer__pb2.SingupInput.SerializeToString,
         response_deserializer=mainServer__pb2.SingupOutput.FromString,
         )
-    self.ResendConfrimCode = channel.unary_unary(
-        '/proto.Account/ResendConfrimCode',
-        request_serializer=mainServer__pb2.ResendConfrimCodeInput.SerializeToString,
+    self.ResendConfirmCode = channel.unary_unary(
+        '/proto.Account/ResendConfirmCode',
+        request_serializer=mainServer__pb2.ResendConfirmCodeInput.SerializeToString,
         response_deserializer=mainServer__pb2.GeneralMsgOutput.FromString,
         )
     self.Confirm = channel.unary_unary(
@@ -157,7 +157,7 @@ class AccountServicer(object):
     context.set_details('Method not implemented!')
     raise NotImplementedError('Method not implemented!')
 
-  def ResendConfrimCode(self, request, context):
+  def ResendConfirmCode(self, request, context):
     # missing associated documentation comment in .proto file
     pass
     context.set_code(grpc.StatusCode.UNIMPLEMENTED)
@@ -210,9 +210,9 @@ def add_AccountServicer_to_server(servicer, server):
           request_deserializer=mainServer__pb2.SingupInput.FromString,
           response_serializer=mainServer__pb2.SingupOutput.SerializeToString,
       ),
-      'ResendConfrimCode': grpc.unary_unary_rpc_method_handler(
-          servicer.ResendConfrimCode,
-          request_deserializer=mainServer__pb2.ResendConfrimCodeInput.FromString,
+      'ResendConfirmCode': grpc.unary_unary_rpc_method_handler(
+          servicer.ResendConfirmCode,
+          request_deserializer=mainServer__pb2.ResendConfirmCodeInput.FromString,
           response_serializer=mainServer__pb2.GeneralMsgOutput.SerializeToString,
       ),
       'Confirm': grpc.unary_unary_rpc_method_handler(
