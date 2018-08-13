@@ -17,7 +17,7 @@ def gen_configuration(**kwargs):
         'password': kwargs.get('password'),
         'port': kwargs.get('port', 31400),
         'mgr_inst': kwargs.get('mgr_inst', None),
-        'cert_path': kwargs.get('cert_path', 'server.crt'),
+        'cert_context': kwargs.get('cert_context'),
         'ssl_target_name': kwargs.get('ssl_target_name', 'api.federator.ai'),
         'default_authority': kwargs.get('default_authority', 'api.federator.ai')}
     return configuration
@@ -34,7 +34,7 @@ class GRPcClient:
             self.auth = (
                 ('account', configuration.get('user')),
                 ('password', configuration.get('password')))
-        self.cert_path = configuration.get('cert_path')
+        self.cert_context = configuration.get('cert_context')
         self.ssl_target_name = configuration.get('ssl_target_name')
         self.default_authority = configuration.get('default_authority')
         self.mgr_inst = configuration.get('mgr_inst')
@@ -52,40 +52,31 @@ class GRPcClient:
 
     def _get_channel(self):
         try:
-            if not self.channel:
-                cert_file = self.cert_path
-                if cert_file == 'server.crt':
-                    cert_path = os.path.abspath(__file__)
-                    cert_path = cert_path[:cert_path.rfind('/')]
-                    cert_file = cert_path + '/' + cert_file
-                with open(cert_file, 'rb') as f:
-                    trusted_certs = f.read()
-                creds = grpc.ssl_channel_credentials(
-                    root_certificates=trusted_certs)
-                self.channel = \
-                    grpc.secure_channel('{}:{}'.format(
-                        self.host, self.port), creds,
-                        options=(('grpc.ssl_target_name_override', self.ssl_target_name,),
-                                 ('grpc.default_authority', self.default_authority),))
+            creds = grpc.ssl_channel_credentials(
+                root_certificates=self.cert_context)
+            self.channel = \
+                grpc.secure_channel('{}:{}'.format(
+                    self.host, self.port), creds,
+                    options=(('grpc.ssl_target_name_override', self.ssl_target_name,),
+                             ('grpc.default_authority', self.default_authority),))
         except Exception as e:
             self._logger.error(
                 'failed to create connection exception: {}'.format(
                     ';'.join(str(e).split('\n\t'))))
 
     def test_connection(self):
-        resp = DummyResonse()
         try:
             stub_accout = client_pb2_grpc.AccountStub(self.channel)
             result = stub_accout.AccountHeartbeat(client_pb2.Empty())
             if result and "is alive" in str(result.message):
-                resp.status_code = 200
-                resp.content = ''
+                return True
+            else:
+                return False
         except Exception as e:
-            resp.status_code = 400
-            resp.content = ';'.join(str(e).split('\n\t'))
             self._logger.error(
-                'failed to test connection exception: {}'.format(resp.content))
-        return resp
+                'failed to test connection exception: {}'.format(
+                    ';'.join(str(e).split('\n\t'))))
+            return False
 
     def _send_metrics(self, data, measurement):
         status_info = dict()
@@ -93,9 +84,11 @@ class GRPcClient:
         status_info['success_count'] = 0
         status_info['failure_count'] = 0
         for dp_data in data:
-            measurement = measurement
-            if not status_info['measurement']:
+            d_measurement = dp_data.measurement
+            if not d_measurement:
                 status_info['measurement'] = measurement
+            else:
+                status_info['measurement'] = d_measurement
             tag_list = []
             field_list = []
             for name in dp_data.tags:
@@ -116,17 +109,17 @@ class GRPcClient:
                     field = '{}={}'.format(name, dp_data.fields[name])
                 field_list.append(field)
             data = '{},{} {} {}'.format(
-                measurement,
+                status_info['measurement'],
                 ','.join(tag_list),
                 ','.join(field_list),
                 int(time.time() * 1000 * 1000 * 1000))
             try:
-                resp = self._send_info(data=[data], measurement=measurement)
+                resp = self._send_info(data=[data], measurement=status_info['measurement'])
                 status_code = resp.status_code
                 if 200 <= status_code < 300:
                     self._logger.debug(
                         '{} send diskprediction api success(ret: {})'.format(
-                            measurement, status_code))
+                            status_info['measurement'], status_code))
                     status_info['success_count'] += 1
                 else:
                     self._logger.error(

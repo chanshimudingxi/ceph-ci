@@ -2,6 +2,7 @@ from __future__ import absolute_import
 import datetime
 
 from .. import BaseAgent
+from ...common import DP_MGR_STAT_FAILED, DP_MGR_STAT_OK
 from ...common.clusterdata import ClusterAPI
 
 PREDICTION_FILE = '/var/tmp/disk_prediction.json'
@@ -49,10 +50,12 @@ class PredictionAgent(BaseAgent):
             status_code = query_info.status_code
             if status_code == 200:
                 result = query_info.json()
+                self._module_inst.status = DP_MGR_STAT_OK
             else:
                 resp = query_info.json()
                 if resp.get('error'):
                     self._logger.error(str(resp['error']))
+                    self._module_inst.status = DP_MGR_STAT_FAILED
         except Exception as e:
             self._logger.error(str(e))
         return result

@@ -48,7 +48,11 @@ class SAIDiskSmartAgent(MetricsAgent):
                     osds_smart = obj_api.get_device_health(dev_info['dev_id'])
                     if not osds_smart:
                         continue
-                    for s_date, s_val in osds_smart.iteritems():
+                    # Always pass through last smart data record
+                    o_key = sorted(osds_smart.iterkeys(), reverse=True)[0]
+                    if o_key:
+                        s_date = o_key
+                        s_val = osds_smart[s_date]
                         smart_data = SAIDiskSmartFields()
                         smart_data.tags['disk_name'] = str(dev_name)
                         smart_data.fields['cluster_domain_id'] = str(cluster_id)

@@ -7,6 +7,7 @@ from datetime import datetime
 import errno
 import json
 from mgr_module import MgrModule
+import os
 from threading import Event
 
 from .common import DP_MGR_STAT_ENABLED, DP_MGR_STAT_DISABLED
@@ -21,7 +22,7 @@ class Module(MgrModule):
     OPTIONS = [
         {
             'name': 'diskprediction_config_mode',
-            'default': 'cloud'
+            'default': 'local'
         },
         {
             'name': 'diskprediction_server',
@@ -33,15 +34,11 @@ class Module(MgrModule):
         },
         {
             'name': 'diskprediction_user',
-            'default': None
+            'default': ''
         },
         {
             'name': 'diskprediction_password',
-            'default': None
-        },
-        {
-            'name': 'diskprediction_cluster_domain_id',
-            'default': None
+            'default': ''
         },
         {
             'name': 'diskprediction_upload_metrics_interval',
@@ -56,8 +53,8 @@ class Module(MgrModule):
             'default': '43200'
         },
         {
-            'name': 'diskprediction_cert_path',
-            'default': 'server.crt'
+            'name': 'diskprediction_cert_context',
+            'default': ''
         },
         {
             'name': 'diskprediction_ssl_target_name_override',
@@ -74,6 +71,12 @@ class Module(MgrModule):
             'cmd': 'diskprediction config-mode '
                    'name=mode,type=CephString,req=true',
             'desc': 'config disk prediction mode [\"cloud\"|\"local\"]',
+            'perm': 'rw'
+        },
+        {
+            'cmd': 'diskprediction config-cert '
+                   'name=certpath,type=CephString,req=true',
+            'desc': 'provide ssl connection certification file path',
             'perm': 'rw'
         },
         {
@@ -118,11 +121,6 @@ class Module(MgrModule):
         },
         {
             'cmd': 'diskprediction status',
-            'desc': 'Check diskprediction status',
-            'perm': 'r'
-        },
-        {
-            'cmd': 'diskprediction test-api',
             'desc': 'Check diskprediction status',
             'perm': 'r'
         }
@@ -173,37 +171,33 @@ class Module(MgrModule):
     def _config_mode(self, inbuf, cmd):
         str_mode = cmd.get('mode', 'cloud')
         if str_mode.lower() not in ['cloud', 'local']:
-            return -errno.EINVAL, 'invalid configuration, enable=[cloud|local]', ''
+            return -errno.EINVAL, '', 'invalid configuration, enable=[cloud|local]'
         try:
             self.set_config('diskprediction_config_mode', str_mode)
             return (0,
                     'success to config disk prediction mode: %s'
                     % str_mode.lower(), 0)
         except Exception as e:
-            return -errno.EINVAL, str(e), ''
+            return -errno.EINVAL, '', str(e)
 
     def _self_test(self, inbuf, cmd):
         from .test.test_agents import test_agents
         test_agents(self)
         return 0, 'self-test completed', ''
 
-    def _test_api(self, inbuf, cmd):
-        from .common.clusterdata import ClusterAPI
-        devinfo = ClusterAPI(self).get_device_health('WDC_WD1003FBYX-18Y7B0_WD-WCAW32140123')
-        devinfo.values()
-        # devinfo = self.get('devices')
-        self.log.error("devices: %s" % devinfo)
-        return 0, 'test-api completed', ''
-
-    def _set_cert_path(self, inbuf, cmd):
-        str_cert_path = cmd.get('cert_path', '')
-        try:
-            self.set_config('diskprediction_cert_path', str_cert_path)
-            return (0,
-                    'success to config ssl certification file path %s'
-                    % str_cert_path, 0)
-        except Exception as e:
-            return -errno.EINVAL, str(e), ''
+    def _config_cert(self, inbuf, cmd):
+        trusted_certs = ''
+        str_cert_path = cmd.get('certpath', '')
+        if os.path.exists(str_cert_path):
+            with open(str_cert_path, 'rb') as f:
+                trusted_certs = f.read()
+            self.set_config_option(
+                'diskprediction_cert_context', trusted_certs)
+            for _agent in self._agents:
+                _agent.event.set()
+            return 0, 'succeed to config ssl certification', ''
+        else:
+            return -errno.EINVAL, '', 'certification file not existed'
 
     def _set_ssl_target_name(self, inbuf, cmd):
         str_ssl_target = cmd.get('ssl_target_name', '')
@@ -212,7 +206,7 @@ class Module(MgrModule):
             return (0,
                     'success to config ssl target name', 0)
         except Exception as e:
-            return -errno.EINVAL, str(e), ''
+            return -errno.EINVAL, '', str(e)
 
     def _set_ssl_default_authority(self, inbuf, cmd):
         str_ssl_authority = cmd.get('ssl_authority', '')
@@ -221,7 +215,7 @@ class Module(MgrModule):
             return (0,
                     'success to config ssl default authority', 0)
         except Exception as e:
-            return -errno.EINVAL, str(e), ''
+            return -errno.EINVAL, '', str(e)
 
     def _get_predicted_status(self, inbuf, cmd):
         physical_data = dict()
@@ -258,7 +252,7 @@ class Module(MgrModule):
                 msg = 'unable to get osd {} predicted data, {}'.format(
                     cmd['dev_id'], str(e))
             self.log.error(msg)
-            return -errno.EINVAL, msg, ''
+            return -errno.EINVAL, '', msg
         return 0, msg, ''
 
     def _config_set(self, inbuf, cmd):
@@ -313,7 +307,7 @@ class Module(MgrModule):
                         self, fun_name)
                     if fun:
                         return fun(inbuf, cmd)
-        return -errno.EINVAL, 'cmd not found', ''
+        return -errno.EINVAL, '', 'cmd not found'
 
     def show_module_config(self):
         self.fsid = self.get('mon_map')['fsid']
@@ -345,7 +339,7 @@ class Module(MgrModule):
             self.shutdown_event.wait(5)
             if self.shutdown_event.is_set():
                 break
-        self.stop_cloud_disk_prediction()
+        self.stop_disk_prediction()
 
     def start_cloud_disk_prediction(self):
         assert not self._activated_cloud

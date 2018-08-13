@@ -10,8 +10,8 @@ function will return a string to indicate disk failure status: "Good",
 
 An example code is as follows:
 
-# >>> model = DiskFailurePredictor.DiskFailurePredictor("./models")
-# >>> status = model.initialize()
+# >>> model = DiskFailurePredictor.DiskFailurePredictor()
+# >>> status = model.initialize("./models")
 # >>> if status:
 # >>>     model.predict(disk_days)
 'Bad'
@@ -21,6 +21,7 @@ Provided by ProphetStor Data Services Inc.
 http://www.prophetstor.com/
 
 """
+
 import os
 import json
 from sklearn.externals import joblib
@@ -44,6 +45,7 @@ class DiskFailurePredictor(object):
         """
         This function may throw exception due to wrong file operation.
         """
+
         self.model_dirpath = ""
         self.model_context = {}
 
@@ -58,17 +60,20 @@ class DiskFailurePredictor(object):
 
         Raises:
         """
+
         config_path = os.path.join(model_dirpath, self.CONFIG_FILE)
         if not os.path.isfile(config_path):
             return "Missing config file: " + config_path
         else:
             with open(config_path) as f_conf:
                 self.model_context = json.load(f_conf)
+
         for model_name in self.model_context:
             model_path = os.path.join(model_dirpath, model_name)
 
             if not os.path.isfile(model_path):
                 return "Missing model file: " + model_path
+
         self.model_dirpath = model_dirpath
 
     @staticmethod
@@ -90,18 +95,20 @@ class DiskFailurePredictor(object):
             Exceptions of wrong list/dict operations.
         """
 
-        # all_attrs = [set(disk_day.keys()) for disk_day in disk_days]
-        # attr_list = list(set.intersection(*all_attrs))
+        all_attrs = [set(disk_day.keys()) for disk_day in disk_days]
+        attr_list = list(set.intersection(*all_attrs))
         attr_list = disk_days[0].keys()
         prev_days = disk_days[:-1]
         curr_days = disk_days[1:]
         diff_disk_days = []
+
         for prev, cur in zip(prev_days, curr_days):
-            diff_disk_days.append({attr: (int(cur[attr]) - int(prev[attr]))
+            diff_disk_days.append({attr:(int(cur[attr]) - int(prev[attr]))
                                    for attr in attr_list})
+
         return attr_list, diff_disk_days
 
-    def __get_best_model(self, attr_list):
+    def __get_best_models(self, attr_list):
         """
         Find the best model from model list according to given attribute list.
 
@@ -115,15 +122,30 @@ class DiskFailurePredictor(object):
 
         Raises:
         """
+
         models = self.model_context.keys()
+
         scores = []
         for model_name in models:
             scores.append(sum(attr in attr_list
                               for attr in self.model_context[model_name]))
-        best_model_idx = scores.index(max(scores))
-        model_name = list(models)[best_model_idx]
-        model_attrlist = self.model_context[model_name]
-        return os.path.join(self.model_dirpath, model_name), model_attrlist
+        max_score = max(scores)
+
+        # Skip if too few matched attributes.
+        if len(attr_list) > 3 * max_score or max_score < 3:
+            return None
+
+        best_models = {}
+        best_model_indices = [idx for idx, score in enumerate(scores)
+                              if score > max_score - 2]
+        for model_idx in best_model_indices:
+            model_name = list(models)[model_idx]
+            model_path = os.path.join(self.model_dirpath, model_name)
+            model_attrlist = self.model_context[model_name]
+            best_models[model_path] = model_attrlist
+
+        return best_models
+        # return os.path.join(self.model_dirpath, model_name), model_attrlist
 
     @staticmethod
     def __get_ordered_attrs(disk_days, model_attrlist):
@@ -139,15 +161,20 @@ class DiskFailurePredictor(object):
 
         Raises: None
         """
+
         ordered_attrs = []
+
         for one_day in disk_days:
             one_day_attrs = []
+
             for attr in model_attrlist:
                 if attr in one_day:
                     one_day_attrs.append(one_day[attr])
                 else:
                     one_day_attrs.append(0)
+
             ordered_attrs.append(one_day_attrs)
+
         return ordered_attrs
 
     def predict(self, disk_days):
@@ -161,18 +188,33 @@ class DiskFailurePredictor(object):
         Returns:
             A string indicates prediction result. One of following four strings
             will be returned according to disk failure status:
-            (1) "Good" : Disk is health
-            (2) "Warning" : Disk has some symptoms but may not fail immediately
-            (3) "Bad" : Disk is in danger and data backup is highly recommended
-            (4) "Unknown" : Not enough data for prediction.
+            (1) Good : Disk is health
+            (2) Warning : Disk has some symptoms but may not fail immediately
+            (3) Bad : Disk is in danger and data backup is highly recommended
+            (4) Unknown : Not enough data for prediction.
 
         Raises: None
         """
-        # pred = []
+
+        all_pred = []
+
         attr_list, diff_data = DiskFailurePredictor.__get_diff_attrs(disk_days)
-        modelpath, model_attrlist = self.__get_best_model(attr_list)
-        ordered_data = DiskFailurePredictor.__get_ordered_attrs(
-            diff_data, model_attrlist)
-        clf = joblib.load(modelpath)
-        pred = clf.predict(ordered_data)
-        return "Bad" if any(pred) else "Good"
+        modellist = self.__get_best_models(attr_list)
+        if modellist is None:
+            return "Unknown"
+
+        for modelpath in modellist:
+            model_attrlist = modellist[modelpath]
+            ordered_data = DiskFailurePredictor.__get_ordered_attrs(
+                diff_data, model_attrlist)
+            clf = joblib.load(modelpath)
+            pred = clf.predict(ordered_data)
+
+            all_pred.append(1 if any(pred) else 0)
+
+        if 3 ** sum(all_pred) >= len(modellist):
+            return "Bad"
+        elif any(all_pred):
+            return "Warning"
+        else:
+            return "Good"
