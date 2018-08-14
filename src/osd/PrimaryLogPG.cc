@@ -10380,21 +10380,14 @@ void PrimaryLogPG::issue_repop(RepGather *repop, OpContext *ctx)
     }
   }
 
-  for (set<pg_shard_t>::const_iterator i = acting_recovery_backfill.begin();
-       i != acting_recovery_backfill.end();
-       ++i) {
-    pg_shard_t peer(*i);
-    if (peer == pg_whoami) continue;
-    if (async_recovery_targets.count(peer) && peer_missing[peer].is_missing(soid)) {
-      for (auto &&entry: ctx->log) {
-	missing_loc.add_missing(entry.soid, entry.version, eversion_t(), entry.is_delete());
-      }
-    }
-  }
-
   dout(30) << __func__ << " missing_loc before: " << missing_loc.get_locations(soid) << dendl;
 
   if (requires_missing_loc) {
+    for (auto &&entry: ctx->log) {
+      missing_loc.add_missing(entry.soid, entry.version,
+                              eversion_t(), entry.is_delete());
+    }
+
     // clear out missing_loc
     missing_loc.clear_location(soid);
     for (set<pg_shard_t>::const_iterator i = actingset.begin();
