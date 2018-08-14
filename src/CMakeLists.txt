@@ -293,16 +293,8 @@ add_subdirectory(json_spirit)
 include_directories(SYSTEM "${CMAKE_SOURCE_DIR}/src/xxHash")
 include_directories(SYSTEM "${CMAKE_SOURCE_DIR}/src/rapidjson/include")
 
-set(GMOCK_INCLUDE_DIRS
-  "${CMAKE_SOURCE_DIR}/src/googletest/googletest/include/gmock")
-set(GTEST_INCLUDE_DIRS
-  "${CMAKE_SOURCE_DIR}/src/googletest/googletest/include/gtest")
-
 include_directories("${CMAKE_SOURCE_DIR}/src/dmclock/src")
 include_directories("${CMAKE_SOURCE_DIR}/src/dmclock/support/src")
-
-# needed for source files that friend unit tests (e.g., using FRIEND_TEST)
-include_directories(SYSTEM "${CMAKE_SOURCE_DIR}/src/googletest/googletest/include")
 
 if(WITH_SEASTAR)
   find_package(fmt 4.0.0 QUIET)
@@ -494,14 +486,8 @@ target_link_libraries(ceph-mon mon os global-static ceph-common
   ${CMAKE_DL_LIBS})
 install(TARGETS ceph-mon DESTINATION bin)
 
+
 # OSD/ObjectStore
-# make rocksdb statically
-
-if(NOT WITH_SYSTEM_ROCKSDB)
-  include(BuildRocksDB)
-  build_rocksdb()
-endif(NOT WITH_SYSTEM_ROCKSDB)
-
 include(TestBigEndian)
 test_big_endian(CEPH_BIG_ENDIAN)
 if(NOT CEPH_BIG_ENDIAN)
@@ -541,7 +527,15 @@ add_subdirectory(erasure-code)
 
 # Support/Tools
 if(WITH_TESTS)
-  add_subdirectory(googletest/googlemock)
+  option(WITH_SYSTEM_GTEST "require and build with system gtest and gmock" OFF)
+  if(WITH_SYSTEM_GTEST)
+    find_package(GTest REQUIRED)
+    find_package(GMock REQUIRED)
+  else()
+    include(BuildGoogleTest)
+    build_google_test(${CMAKE_CURRENT_SOURCE_DIR}/googletest)
+  endif()
+
   add_subdirectory(test)
 endif(WITH_TESTS)
 
